@@ -97,16 +97,17 @@ display:
     id: esprinkler_oled
     update_interval: 200ms
     lambda: |-
-      // Stacked clock at top-right ("HH:MM" / "Day M/D"), visible on every card.
+      // Stacked clock at top-right ("HH:MM" / day-of-week). Two short right-aligned
+      // lines keep enough headroom that the larger "ESPrinkler" header still fits.
       // The strftime format for the time line is a substitution so 12 vs 24-hour
       // is a one-line change.
       {
         ESPTime now = id(${time_id}).now();
         char tb[12] = "--:--";
-        char db[16] = " ";
+        char db[8] = " ";
         if (now.is_valid()) {
           now.strftime(tb, sizeof(tb), "${clock_format}");
-          now.strftime(db, sizeof(db), "%a %m/%d");
+          now.strftime(db, sizeof(db), "%a");
         }
         it.print(128, 0, id(oled_font_sm), TextAlign::TOP_RIGHT, tb);
         it.print(128, 12, id(oled_font_sm), TextAlign::TOP_RIGHT, db);
@@ -133,7 +134,7 @@ display:
       const int card = ((id(esp_ui_card) % total_cards) + total_cards) % total_cards;
 
       if (card == 0) {  // STATUS
-        it.print(0, 0, id(oled_font_sm), "ESPrinkler");
+        it.print(0, 0, id(oled_font_lg), "ESPrinkler");
         std::string st = id(esp_state).has_state() ? id(esp_state).state : "—";
         it.printf(0, 26, id(oled_font_sm), "State: %s", st.c_str());
         if (st == "running" || st == "manual") {
