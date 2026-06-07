@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  esphome-config:
+    name: Validate ESPHome configs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ESPHome
+        run: pip install esphome
+      - name: Create test secrets
+        run: |
+          KEY=$(python -c "import base64,os;print(base64.b64encode(os.urandom(32)).decode())")
+          cat > examples/secrets.yaml <<EOF
+          wifi_ssid: "TestNet"
+          wifi_password: "testpassword123"
+          api_encryption_key: "$KEY"
+          ota_password: "testota"
+          EOF
+      - name: Validate each example
+        run: |
+          for f in examples/*.yaml; do
+            echo "::group::esphome config $f"
+            esphome config "$f"
+            echo "::endgroup::"
+          done
+
+  card:
+    name: Build Lovelace card
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: card
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install
+      - run: npm run lint
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: esprinkler-card
+          path: card/dist/esprinkler-card.js

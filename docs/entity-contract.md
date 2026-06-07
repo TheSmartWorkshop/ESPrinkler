@@ -1,140 +1,132 @@
 # ESPrinkler Entity Contract
 
-**Contract version: `0.1.0-draft`**
+**Contract version: `0.2.0`** — reconciled with the shipping implementation.
 
-This is the single most important document in the project. It defines the **stable set of
-entities and state** that the ESPrinkler `external_component` exposes — the interface that
-*every* consumer binds to:
+This is the single most important document in the project. It defines the **entities and
+state** that an ESPrinkler device exposes — the interface that *every* consumer binds to:
 
-- **Home Assistant** (automations, the recorder, voice)
+- **Home Assistant** (automations, recorder, voice)
 - the **Lovelace card** (`card/`, runs in the browser, talks to HA core)
 - the on-device **OLED** UI (`packages/display-oled.yaml`)
 - the on-device **LVGL touchscreen** UI (`packages/display-lvgl.yaml`)
 
-Because four surfaces depend on it, the contract is **versioned and changed deliberately**.
-Additive changes (new entities) bump the minor version; renames/removals/semantic changes
-bump the major version and are called out in `CHANGELOG`.
+An ESPrinkler device is built from **two cooperating blocks** (see `examples/`):
+
+- a stock **`sprinkler:`** controller — the *engine* (sequencing, durations, pump); it
+  auto-creates most of the user-facing control entities.
+- the **`esprinkler:`** brain — the *scheduler* + a *unified state model* the displays and
+  card read.
+
+So the contract has two halves: entities the **engine** creates, and entities the **brain**
+adds. Because four surfaces depend on this surface, it is versioned and changed deliberately.
 
 ---
 
 ## Conventions
 
-- **`id`** — the ESPHome C++ id, used in lambdas and by the on-device displays. Stable,
-  snake_case, prefixed `esp_`. This is the binding handle for OLED/LVGL.
-- **Name** — the Home Assistant friendly name. Defaults are given below and are
-  **user-overridable** in YAML. The HA `entity_id` derives from the name.
-- **Zone index `i`** is **1-based** and matches the order zones are declared in config.
-- Durations the *user* sets are in **minutes**; live countdowns are exposed in **seconds**
-  (HA renders both fine, and seconds are friendlier for display math).
-- Entities marked **(opt)** only exist when the corresponding feature is configured.
-- "Backed by" notes whether the entity is provided by ESPHome's stock `sprinkler`
-  component, by the ESPrinkler brain, or composed from both.
+- **`id`** — the ESPHome C++ id, used in display lambdas. The brain's state entities use a
+  documented id convention (below) so the display packages can bind to them.
+- **Name** — the Home Assistant friendly name; set in YAML, drives the HA `entity_id`.
+- **Zone index `i`** is the order valves are declared in the `sprinkler:` block; the brain's
+  `zones:` list must be given in the same order.
+- Durations are entered in **minutes** (the run-duration number uses `unit_of_measurement:
+  min`, which `sprinkler` converts internally); live countdowns are exposed in **seconds**.
 
 ---
 
-## 1. Controller-level entities (singletons)
+## 1. Engine entities (created by `sprinkler:`)
 
-| Logical entity | Domain | `id` | Default name | Semantics | Backed by |
-| --- | --- | --- | --- | --- | --- |
-| Controller state | `text_sensor` | `esp_state` | "State" | enum: `idle`, `running`, `paused`, `manual`, `rain_delay` | brain |
-| Active zone | `text_sensor` | `esp_active_zone` | "Active Zone" | name of the running zone, or `—` | brain |
-| Watering | `binary_sensor` | `esp_watering` | "Watering" | `on` whenever any valve is open | brain |
-| Active-zone remaining | `sensor` (s) | `esp_active_remaining` | "Time Remaining" | countdown for the running zone | sprinkler |
-| Total remaining | `sensor` (s) | `esp_total_remaining` | "Total Time Remaining" | sum across the queued run | brain |
-| Schedule enabled | `switch` | `esp_schedule_enabled` | "Schedule Enabled" | master enable for automatic runs | brain |
-| Start full cycle | `button` | `esp_start_cycle` | "Start Cycle" | run all enabled zones in sequence | sprinkler |
-| Stop | `button` | `esp_stop` | "Stop" | stop everything, clear the queue | sprinkler |
-| Paused | `switch` | `esp_paused` | "Paused" | pause/resume the active run | sprinkler |
-| Repeat cycles | `number` | `esp_repeat` | "Repeat" | extra full-cycle repeats (0–N) | sprinkler |
-| Seasonal adjust | `number` (%) | `esp_multiplier` | "Seasonal Adjust" | scales every zone duration, 0–200 % | sprinkler |
-| Reverse order | `switch` | `esp_reverse` | "Reverse" | run the queue back-to-front | sprinkler |
-| Rain delay | `number` (h) | `esp_rain_delay` | "Rain Delay" | suspend the schedule for N hours | brain |
-| Next run | `text_sensor` (opt) | `esp_next_run` | "Next Run" | human string for the next scheduled start | scheduler |
+Named by the user in the `sprinkler:` block. These already satisfy most of the control
+surface, so the brain does not duplicate them.
 
----
+| Logical entity | Domain | sprinkler key | Notes |
+| --- | --- | --- | --- |
+| Main switch | `switch` | `main_switch` | start/stop the whole controller |
+| Auto-advance | `switch` | `auto_advance_switch` | run zones as a sequence |
+| Reverse | `switch` | `reverse_switch` | run the queue back-to-front |
+| Seasonal adjust | `number` | `multiplier_number` | scales every zone duration |
+| Repeat | `number` | `repeat_number` | extra full-cycle repeats |
+| Zone valve | `switch` | per-valve `valve_switch` | logical on/off for zone *i* |
+| Zone enable | `switch` | per-valve `enable_switch` | include zone *i* in auto cycles |
+| Zone duration | `number` | per-valve `run_duration_number` | per-zone run length (min) |
 
-## 2. Per-zone entities (×N)
-
-For each zone `i` (1-based). Default names use the zone's configured `name` when set,
-otherwise "Zone i".
-
-| Logical entity | Domain | `id` | Default name | Semantics | Backed by |
-| --- | --- | --- | --- | --- | --- |
-| Valve | `switch` | `esp_zone_{i}_valve` | "Zone i" | the physical output (raw on/off) | sprinkler→output |
-| Enabled | `switch` | `esp_zone_{i}_enabled` | "Zone i Enabled" | include this zone in automatic cycles | sprinkler |
-| Run | `button` | `esp_zone_{i}_run` | "Zone i Run" | manually run this zone for its duration | sprinkler |
-| Duration | `number` (min) | `esp_zone_{i}_duration` | "Zone i Duration" | per-zone run length | sprinkler |
-| Active | `binary_sensor` | `esp_zone_{i}_active` | "Zone i Active" | this zone is currently watering | brain |
-| Remaining | `sensor` (s) | `esp_zone_{i}_remaining` | "Zone i Remaining" | countdown when active, else 0 | brain |
-
-**Zone configuration metadata** (set in YAML, not separate entities):
-
-- `name` — display name (drives default entity names).
-- `flow_type` — `sprinkler` \| `drip`. Affects default duration, UI iconography, and
-  grouping; it does **not** branch the core relay logic.
-- `output` — the GPIO/expander pin (or `output` id) the valve is wired to.
+Manual single-zone runs, pause/resume, and "start full cycle" are available as
+**`sprinkler.*` actions** (used by the displays' buttons and exposable as HA `button`s).
 
 ---
 
-## 3. Pump / master valve (opt)
+## 2. Brain entities (created by `esprinkler:`)
 
-Enabled when a master output is configured.
+The net-new state model. The recommended `id`s (used by the display packages) are shown;
+override the names freely.
 
-| Logical entity | Domain | `id` | Default name | Semantics | Backed by |
-| --- | --- | --- | --- | --- | --- |
-| Master active | `binary_sensor` | `esp_master_active` | "Master / Pump" | energized while any zone runs | sprinkler |
-
-Config: `master_output`, plus `pump_start_delay` / `pump_stop_delay` (lead/lag in seconds)
-so the pump or master valve can settle before/after a zone valve actuates.
-
----
-
-## 4. Scheduler entities (on-device, opt)
-
-The schedule lives **on the device** so watering continues if HA is offline. The schedule
-is editable at runtime through HA-native entities (no recompile to change times). v1 models
-one or more **programs**; each program is a start time + day mask, and runs the currently
-*enabled* zones for their configured durations.
-
-For each program `p`:
-
-| Logical entity | Domain | `id` | Default name | Semantics |
+| Logical entity | Domain | recommended `id` | esprinkler key | Semantics |
 | --- | --- | --- | --- | --- |
-| Start time | `datetime`/`time` | `esp_prog_{p}_time` | "Program p Time" | time-of-day the cycle starts |
-| Enabled | `switch` | `esp_prog_{p}_enabled` | "Program p Enabled" | arm/disarm this program |
-| Days | `select` or 7× `switch` | `esp_prog_{p}_days` | "Program p Days" | day-of-week mask |
+| Controller state | `text_sensor` | `esp_state` | `state` | `idle` / `running` / `manual` / `paused` |
+| Active zone | `text_sensor` | `esp_active_zone` | `active_zone` | name of the running zone, or `—` |
+| Next run | `text_sensor` | `esp_next_run` | `next_run` | e.g. `Today 06:00`, `Tomorrow 05:30` |
+| Total remaining | `sensor` (s) | `esp_total_remaining` | `total_remaining` | active valve + queued time |
 
-> **Design note.** ESPHome's stock `sprinkler` handles *sequencing* but not calendar
-> scheduling. The ESPrinkler brain owns the scheduler: it watches `time:` + the `datetime`
-> entities above and triggers `start_cycle` when a program matches. This is the main piece
-> of native logic the project adds on top of `sprinkler`. The exact entity shape for "days"
-> (a multi-select vs. seven switches) is **still open** — see open questions.
+### Per-zone (brain), for each `zones:` entry
+
+| Logical entity | Domain | esprinkler key | Semantics |
+| --- | --- | --- | --- |
+| Active | `binary_sensor` | `zones[i].active` | this zone is currently watering |
+| Remaining | `sensor` (s) | `zones[i].remaining` | seconds left when active, else 0 |
+
+Each zone also carries a `flow_type` (`sprinkler` \| `drip`) — currently metadata for the UI
+(grouping/iconography); it does not branch the core logic.
+
+---
+
+## 3. Scheduler (brain, on-device)
+
+The schedule lives on the device so watering continues if HA is offline. Configured under
+`esprinkler: scheduler: programs:`. Each program is a **start time** + a **day-of-week mask**
+and triggers `start_full_cycle()` on the engine (which runs every *enabled* zone for its
+configured duration).
+
+```yaml
+scheduler:
+  programs:
+    - start_time: "06:00"      # "HH:MM" or "HH:MM:SS"
+      days: [mon, wed, fri]    # day names, or a preset: everyday / weekdays / weekends
+      enabled: true
+```
+
+A `time:` source is required when programs are present (the example configs include both
+`homeassistant` and `sntp` so the schedule survives an HA outage).
 
 ---
 
-## 5. State model (what the displays read)
+## 4. State model (what the displays read)
 
-The OLED and LVGL UIs should never re-derive state — they read these directly:
+The OLED and LVGL UIs never re-derive state — they read the brain's entities directly via the
+`esp_*` ids:
 
-- **Controller state** (`esp_state`) → top-level screen/mode.
-- **Active zone + remaining** (`esp_active_zone`, `esp_active_remaining`) → the "now watering"
-  banner / progress ring.
-- **Per-zone enabled + duration** → the zone list / schedule editor screens.
-- **Next run** (`esp_next_run`) → idle screen.
-- **Watering** (`esp_watering`) → backlight / status LED behavior.
+- `esp_state` → top-level mode (idle vs. watering).
+- `esp_active_zone` + `esp_total_remaining` → the "now watering" line / progress.
+- `esp_next_run` → the idle screen.
 
-Anything a display needs that isn't here is a signal the contract is incomplete — extend the
-contract first, then bind the UI.
+Anything a display needs that isn't here means the contract is incomplete — extend the brain
+first, then bind the UI.
 
 ---
+
+## Not yet implemented (reserved)
+
+These appear in the long-term design but are **not** in `0.2.0`; they're listed so names stay
+stable when added:
+
+- **Rain delay** (`number`, hours) — suspend the schedule. Planned brain entity `esp_rain_delay`.
+- **Schedule-enabled** master switch — a global arm/disarm above per-program `enabled`.
+  (For now, toggle programs individually, or gate via an HA automation.) Planned `esp_schedule_enabled`.
+- **Per-zone flow metering** (`esp_zone_{i}_flow`, gallons) — out of scope for v1.
+- **Flow / rain sensor gating** input (`esp_flow_ok`).
 
 ## Open questions
 
-- **Programs in v1:** how many, and is a per-program *zone subset* needed, or is the global
-  per-zone "enabled" switch enough? (Leaning: global enable for v1, per-program subsets v2.)
-- **Day-of-week representation:** `select` (presets like "Everyday / Even / Odd / Mon-Wed-Fri")
-  vs. seven `switch` entities (fully flexible, noisier entity list).
-- **Flow sensor / rain sensor input:** expose as a gating `binary_sensor` (`esp_flow_ok`)?
-  Deferred until a concrete sensor is in scope.
-- **Per-zone flow metering** (gallons) — out of scope for v1, but reserve the naming
-  `esp_zone_{i}_flow` so we don't paint ourselves into a corner.
+- **Day-of-week UX on-device:** presets (everyday/weekdays/weekends) are supported in YAML; a
+  runtime-editable day picker on the touchscreen is a v2 LVGL task.
+- **Multiple programs & per-program zone subsets:** v1 runs the globally-enabled zones for
+  every program; per-program zone selection is deferred.
