@@ -47,9 +47,23 @@ a zone valve opens and relieves after it closes.
 | Mono OLED | I²C | SSD1306, SH1106 | `packages/display-oled.yaml` |
 | Color TFT touch | SPI (+ touch) | ILI9341, ST7789, GC9A01; XPT2046/FT6x36 touch | `packages/display-lvgl.yaml` |
 
-The OLED package renders status + a simple zone/menu view. The LVGL package provides a full
-touch UI (zone tiles, run/stop, schedule editing). Both bind to the [entity
+The OLED package renders a **card-stack UI** (status + per-action and per-zone screens) and
+always shows the wall-clock at top-right. The LVGL package is a **tabbed UI** (Status /
+Schedule) with the same clock floating top-right. Both bind to the [entity
 contract](entity-contract.md) — they read controller/zone state, they don't compute it.
+
+## Inputs
+
+| Type | Pins | Package |
+| --- | --- | --- |
+| Rotary encoder + push button | 3 GPIO (A, B, button) | `packages/input-encoder.yaml` |
+
+The encoder pairs with the OLED's card stack: rotating cycles cards, pressing executes the
+card's action (run cycle, stop, pause, +24 h rain, clear rain, arm/disarm, run zone *i*).
+Defaults wire an EC11-style encoder to **GPIO32/33** (A/B) and **GPIO27** (button); override
+via substitutions to match your board.
+
+Without an encoder the OLED still shows the Status card; you just lose the menu navigation.
 
 > **Power note for outdoor installs:** 24 VAC irrigation transformers are common; a small
 > AC→5 V buck (or a separate 5 V supply) powers the ESP32 + relay board. Enclosure and power

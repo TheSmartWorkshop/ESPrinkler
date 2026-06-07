@@ -1,7 +1,13 @@
-# ESPrinkler example - 4-zone controller with a monochrome OLED
+# ESPrinkler example - 4-zone controller with OLED + rotary encoder
 #
-# Adds an I2C SSD1306 status screen to the headless build. Note the `id:` values on the
-# esprinkler state entities - the OLED package (display-oled.yaml) binds to them by id.
+# Adds an I2C SSD1306 status screen and an EC11 rotary encoder (with push button) to
+# the headless build. The OLED renders the entity-contract state and the encoder drives
+# a card-stack UI (rotate = switch card, press = activate). All ids match the conventions
+# expected by packages/display-oled.yaml and packages/input-encoder.yaml.
+
+# Flip to "true" for active-low relay boards (a LOW input energizes the relay).
+substitutions:
+  relay_inverted: "false"
 
 esphome:
   name: esprinkler-oled
@@ -49,31 +55,121 @@ font:
     size: 20
 
 switch:
-  - { platform: gpio, id: relay_1, pin: GPIO16, internal: true, restore_mode: ALWAYS_OFF }
-  - { platform: gpio, id: relay_2, pin: GPIO17, internal: true, restore_mode: ALWAYS_OFF }
-  - { platform: gpio, id: relay_3, pin: GPIO18, internal: true, restore_mode: ALWAYS_OFF }
-  - { platform: gpio, id: relay_4, pin: GPIO19, internal: true, restore_mode: ALWAYS_OFF }
-  - { platform: gpio, id: pump_relay, pin: GPIO23, internal: true, restore_mode: ALWAYS_OFF }
+  - platform: gpio
+    id: relay_1
+    pin: GPIO16
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: relay_2
+    pin: GPIO17
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: relay_3
+    pin: GPIO18
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: relay_4
+    pin: GPIO19
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: pump_relay
+    pin: GPIO23
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
 
 display:
   - platform: ssd1306_i2c
     model: "SSD1306 128x64"
     address: 0x3C
     id: esprinkler_oled
+    update_interval: 200ms
     lambda: |-
-      it.print(0, 0, id(oled_font_lg), "ESPrinkler");
-      std::string st = id(esp_state).has_state() ? id(esp_state).state : "—";
-      it.printf(0, 24, id(oled_font_sm), "State: %s", st.c_str());
-      if (st == "running" || st == "manual") {
-        std::string zone = id(esp_active_zone).has_state() ? id(esp_active_zone).state : "—";
-        it.printf(0, 38, id(oled_font_sm), "Zone: %s", zone.c_str());
-        if (id(esp_total_remaining).has_state()) {
-          int secs = (int) id(esp_total_remaining).state;
-          it.printf(0, 52, id(oled_font_sm), "Left: %d:%02d", secs / 60, secs % 60);
+      // Clock at top-right of every card ("Day HH:MM"); the rotary encoder
+      // drives esp_ui_card and the body below renders the matching screen.
+      {
+        ESPTime now = id(sntp_time).now();
+        char tb[12] = "--:--";
+        if (now.is_valid()) now.strftime(tb, sizeof(tb), "%a %H:%M");
+        it.print(128, 0, id(oled_font_sm), TextAlign::TOP_RIGHT, tb);
+      }
+      const int card = ((id(esp_ui_card) % 11) + 11) % 11;
+      if (card != 0) {
+        char ind[12];
+        snprintf(ind, sizeof(ind), "%d/11", card + 1);
+        it.print(0, 64, id(oled_font_sm), TextAlign::BOTTOM_LEFT, ind);
+      }
+      switch (card) {
+        case 0: {
+          it.print(0, 0, id(oled_font_lg), "ESPrinkler");
+          std::string st = id(esp_state).has_state() ? id(esp_state).state : "—";
+          it.printf(0, 24, id(oled_font_sm), "State: %s", st.c_str());
+          if (st == "running" || st == "manual") {
+            std::string zone = id(esp_active_zone).has_state() ? id(esp_active_zone).state : "—";
+            it.printf(0, 38, id(oled_font_sm), "Zone: %s", zone.c_str());
+            if (id(esp_total_remaining).has_state()) {
+              int secs = (int) id(esp_total_remaining).state;
+              it.printf(0, 52, id(oled_font_sm), "Left: %d:%02d", secs / 60, secs % 60);
+            }
+          } else {
+            std::string next = id(esp_next_run).has_state() ? id(esp_next_run).state : "—";
+            it.printf(0, 52, id(oled_font_sm), "Next: %s", next.c_str());
+          }
+          break;
         }
-      } else {
-        std::string next = id(esp_next_run).has_state() ? id(esp_next_run).state : "—";
-        it.printf(0, 52, id(oled_font_sm), "Next: %s", next.c_str());
+        case 1:
+          it.print(0, 18, id(oled_font_lg), "Start all");
+          it.print(0, 48, id(oled_font_sm), "Press to run cycle");
+          break;
+        case 2:
+          it.print(0, 18, id(oled_font_lg), "Stop");
+          it.print(0, 48, id(oled_font_sm), "Press to shut down");
+          break;
+        case 3: {
+          bool paused = id(esp_state).has_state() && id(esp_state).state == "paused";
+          it.print(0, 18, id(oled_font_lg), paused ? "Resume" : "Pause");
+          it.print(0, 48, id(oled_font_sm), paused ? "Press to resume" : "Press to pause");
+          break;
+        }
+        case 4: {
+          it.print(0, 18, id(oled_font_lg), "+24h rain");
+          if (id(esp_rain_delay).has_state() && (int) id(esp_rain_delay).state > 0) {
+            int h = (int) id(esp_rain_delay).state;
+            it.printf(0, 48, id(oled_font_sm), "Now: %dh remaining", h);
+          } else {
+            it.print(0, 48, id(oled_font_sm), "Press to set +24h");
+          }
+          break;
+        }
+        case 5:
+          it.print(0, 18, id(oled_font_lg), "Clear rain");
+          it.print(0, 48, id(oled_font_sm), "Press to clear");
+          break;
+        case 6: {
+          bool armed = id(esp_schedule_enabled).state;
+          it.print(0, 18, id(oled_font_lg), armed ? "Disarm" : "Arm");
+          it.print(0, 48, id(oled_font_sm), armed ? "Press to disable" : "Press to enable");
+          break;
+        }
+        default: {
+          int zi = card - 7;
+          char title[20];
+          snprintf(title, sizeof(title), "Run zone %d", zi + 1);
+          it.print(0, 18, id(oled_font_lg), title);
+          const char *vn = id(yard).valve_name(zi);
+          if (vn != nullptr && vn[0] != '\0')
+            it.printf(0, 38, id(oled_font_sm), "%s", vn);
+          it.print(0, 48, id(oled_font_sm), "Press to start");
+          break;
+        }
       }
 
 sprinkler:
@@ -107,6 +203,8 @@ esprinkler:
   total_remaining:
     name: "Total Time Remaining"
     id: esp_total_remaining
+  rain_delay: { name: "Rain Delay", id: esp_rain_delay }
+  schedule_enabled: { name: "Schedule Enabled", id: esp_schedule_enabled }
   zones:
     - { name: "Front Lawn", flow_type: sprinkler, active: { name: "Front Lawn Active" }, remaining: { name: "Front Lawn Remaining" } }
     - { name: "Back Lawn", flow_type: sprinkler, active: { name: "Back Lawn Active" }, remaining: { name: "Back Lawn Remaining" } }
@@ -116,3 +214,51 @@ esprinkler:
     programs:
       - start_time: "05:30"
         days: weekends
+
+# --- Rotary encoder + button (card-stack UX over the OLED) --------------------------
+# State global the OLED reads.
+globals:
+  - id: esp_ui_card
+    type: int
+    restore_value: false
+    initial_value: "0"
+
+sensor:
+  - platform: rotary_encoder
+    id: esp_ui_encoder
+    pin_a: { number: GPIO32, mode: { input: true, pullup: true } }
+    pin_b: { number: GPIO33, mode: { input: true, pullup: true } }
+    publish_initial_value: false
+    on_clockwise:
+      then:
+        - lambda: 'id(esp_ui_card) = (id(esp_ui_card) + 1) % 11;'
+    on_anticlockwise:
+      then:
+        - lambda: 'id(esp_ui_card) = (id(esp_ui_card) + 10) % 11;'
+
+binary_sensor:
+  - platform: gpio
+    id: esp_ui_button
+    pin: { number: GPIO27, mode: { input: true, pullup: true }, inverted: true }
+    internal: true
+    filters:
+      - delayed_on: 30ms
+    on_press:
+      then:
+        - lambda: |-
+            int card = ((id(esp_ui_card) % 11) + 11) % 11;
+            switch (card) {
+              case 0: break;
+              case 1: id(yard).start_full_cycle(); break;
+              case 2: id(yard).shutdown(); break;
+              case 3:
+                if (id(yard).paused_valve().has_value()) id(yard).resume();
+                else if (id(yard).active_valve().has_value()) id(yard).pause();
+                break;
+              case 4: id(esp_rain_delay).make_call().set_value(24.0f).perform(); break;
+              case 5: id(esp_rain_delay).make_call().set_value(0.0f).perform(); break;
+              case 6: id(esp_schedule_enabled).toggle(); break;
+              default:
+                id(yard).start_single_valve(card - 7);
+                break;
+            }

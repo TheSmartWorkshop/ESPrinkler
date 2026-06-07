@@ -6,6 +6,10 @@
 # The LVGL home page binds to the same esp_* state ids the OLED/card use; lambda-bound
 # labels auto-update, and the buttons call sprinkler actions.
 
+# Flip to "true" for active-low relay boards (a LOW input energizes the relay).
+substitutions:
+  relay_inverted: "false"
+
 esphome:
   name: esprinkler-touch
   friendly_name: ESPrinkler (Touch)
@@ -74,11 +78,36 @@ touchscreen:
 
 # --- Relays ----------------------------------------------------------------------
 switch:
-  - { platform: gpio, id: relay_1, pin: GPIO1, internal: true, restore_mode: ALWAYS_OFF }
-  - { platform: gpio, id: relay_2, pin: GPIO2, internal: true, restore_mode: ALWAYS_OFF }
-  - { platform: gpio, id: relay_3, pin: GPIO6, internal: true, restore_mode: ALWAYS_OFF }
-  - { platform: gpio, id: relay_4, pin: GPIO4, internal: true, restore_mode: ALWAYS_OFF }
-  - { platform: gpio, id: pump_relay, pin: GPIO5, internal: true, restore_mode: ALWAYS_OFF }
+  - platform: gpio
+    id: relay_1
+    pin: GPIO1
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: relay_2
+    pin: GPIO2
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: relay_3
+    pin: GPIO6
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: relay_4
+    pin: GPIO4
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: pump_relay
+    pin: GPIO5
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
 
 # --- Engine ----------------------------------------------------------------------
 sprinkler:
@@ -329,3 +358,15 @@ lvgl:
                                 : std::string("Arm schedule");
                       on_click:
                         - switch.toggle: esp_schedule_enabled
+        # Floating clock — drawn after the tabview so it sits on top of the tab
+        # bar's empty right edge. Visible on every tab.
+        - label:
+            align: TOP_RIGHT
+            x: -8
+            y: 6
+            text: !lambda |-
+              ESPTime now = id(sntp_time).now();
+              if (!now.is_valid()) return std::string("--:--");
+              char tb[20];
+              now.strftime(tb, sizeof(tb), "%a %H:%M");
+              return std::string(tb);

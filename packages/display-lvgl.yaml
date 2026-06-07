@@ -26,6 +26,7 @@ substitutions:
   touch_cs: GPIO15
   touch_irq: GPIO16
   lvgl_rotation: "90"
+  time_id: sntp_time
 
 spi:
   clk_pin: ${spi_clk}
@@ -196,3 +197,15 @@ lvgl:
                                 : std::string("Arm schedule");
                       on_click:
                         - switch.toggle: esp_schedule_enabled
+        # Floating clock — drawn after the tabview so it sits on top of the tab bar's
+        # empty right edge. Visible on every tab.
+        - label:
+            align: TOP_RIGHT
+            x: -8
+            y: 6
+            text: !lambda |-
+              ESPTime now = id(${time_id}).now();
+              if (!now.is_valid()) return std::string("--:--");
+              char tb[20];
+              now.strftime(tb, sizeof(tb), "%a %H:%M");
+              return std::string(tb);

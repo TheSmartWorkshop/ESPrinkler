@@ -3,11 +3,19 @@
 # A ready-made status UI for an I2C SSD1306/SH1106 128x64 OLED. Runs on any ESP32.
 # It RENDERS the entity-contract state; it does not compute it.
 #
+# Cooperates with the optional packages/input-encoder.yaml: this package owns the
+# `esp_ui_card` global; the encoder writes it (rotate cycles cards, press activates).
+# Without an encoder the card stays at 0 and you get the Status screen.
+#
 # CONVENTION: this package binds to entities by id. Your config must define these ids:
 #   - text_sensor id: esp_state          (esprinkler: state:)
 #   - text_sensor id: esp_active_zone     (esprinkler: active_zone:)
 #   - text_sensor id: esp_next_run        (esprinkler: next_run:)
 #   - sensor      id: esp_total_remaining (esprinkler: total_remaining:)
+#   - number      id: esp_rain_delay      (esprinkler: rain_delay:)
+#   - switch      id: esp_schedule_enabled (esprinkler: schedule_enabled:)
+#   - time        id: ${time_id}          (defaults to sntp_time)
+#   - sprinkler   id: ${sprinkler_controller} (defaults to yard; used for valve_name())
 # See examples/oled.yaml for a complete device using this package.
 
 substitutions:
@@ -15,6 +23,17 @@ substitutions:
   oled_scl: GPIO22
   oled_address: "0x3C"
   oled_model: "SSD1306 128x64"
+  time_id: sntp_time
+  sprinkler_controller: yard
+  zone_count: "4"
+
+# Card-stack UI state. Card 0 = STATUS; the rest are encoder-driven action cards.
+# See packages/input-encoder.yaml for the card numbering and what press does.
+globals:
+  - id: esp_ui_card
+    type: int
+    restore_value: false
+    initial_value: "0"
 
 i2c:
   sda: ${oled_sda}
@@ -33,18 +52,91 @@ display:
     model: ${oled_model}
     address: ${oled_address}
     id: esprinkler_oled
+    update_interval: 200ms
     lambda: |-
-      it.print(0, 0, id(oled_font_lg), "ESPrinkler");
-      std::string st = id(esp_state).has_state() ? id(esp_state).state : "—";
-      it.printf(0, 24, id(oled_font_sm), "State: %s", st.c_str());
-      if (st == "running" || st == "manual") {
-        std::string zone = id(esp_active_zone).has_state() ? id(esp_active_zone).state : "—";
-        it.printf(0, 38, id(oled_font_sm), "Zone: %s", zone.c_str());
-        if (id(esp_total_remaining).has_state()) {
-          int secs = (int) id(esp_total_remaining).state;
-          it.printf(0, 52, id(oled_font_sm), "Left: %d:%02d", secs / 60, secs % 60);
+      // Always-visible clock at top-right (shortened to "Day HH:MM").
+      {
+        ESPTime now = id(${time_id}).now();
+        char tb[12] = "--:--";
+        if (now.is_valid())
+          now.strftime(tb, sizeof(tb), "%a %H:%M");
+        it.print(128, 0, id(oled_font_sm), TextAlign::TOP_RIGHT, tb);
+      }
+
+      const int total_cards = 7 + ${zone_count};
+      const int card = id(esp_ui_card) % total_cards;
+
+      // Bottom-line page indicator ("N/M") on every non-status card.
+      if (card != 0) {
+        char ind[12];
+        snprintf(ind, sizeof(ind), "%d/%d", card + 1, total_cards);
+        it.print(0, 64, id(oled_font_sm), TextAlign::BOTTOM_LEFT, ind);
+      }
+
+      switch (card) {
+        case 0: {  // STATUS
+          it.print(0, 0, id(oled_font_lg), "ESPrinkler");
+          std::string st = id(esp_state).has_state() ? id(esp_state).state : "—";
+          it.printf(0, 24, id(oled_font_sm), "State: %s", st.c_str());
+          if (st == "running" || st == "manual") {
+            std::string zone = id(esp_active_zone).has_state() ? id(esp_active_zone).state : "—";
+            it.printf(0, 38, id(oled_font_sm), "Zone: %s", zone.c_str());
+            if (id(esp_total_remaining).has_state()) {
+              int secs = (int) id(esp_total_remaining).state;
+              it.printf(0, 52, id(oled_font_sm), "Left: %d:%02d", secs / 60, secs % 60);
+            }
+          } else {
+            std::string next = id(esp_next_run).has_state() ? id(esp_next_run).state : "—";
+            it.printf(0, 52, id(oled_font_sm), "Next: %s", next.c_str());
+          }
+          break;
         }
-      } else {
-        std::string next = id(esp_next_run).has_state() ? id(esp_next_run).state : "—";
-        it.printf(0, 52, id(oled_font_sm), "Next: %s", next.c_str());
+        case 1: {  // START ALL
+          it.print(0, 18, id(oled_font_lg), "Start all");
+          it.print(0, 48, id(oled_font_sm), "Press to run cycle");
+          break;
+        }
+        case 2: {  // STOP
+          it.print(0, 18, id(oled_font_lg), "Stop");
+          it.print(0, 48, id(oled_font_sm), "Press to shut down");
+          break;
+        }
+        case 3: {  // PAUSE / RESUME
+          bool paused = id(esp_state).has_state() && id(esp_state).state == "paused";
+          it.print(0, 18, id(oled_font_lg), paused ? "Resume" : "Pause");
+          it.print(0, 48, id(oled_font_sm), paused ? "Press to resume" : "Press to pause");
+          break;
+        }
+        case 4: {  // +24H RAIN
+          it.print(0, 18, id(oled_font_lg), "+24h rain");
+          if (id(esp_rain_delay).has_state() && (int) id(esp_rain_delay).state > 0) {
+            int h = (int) id(esp_rain_delay).state;
+            it.printf(0, 48, id(oled_font_sm), "Now: %dh remaining", h);
+          } else {
+            it.print(0, 48, id(oled_font_sm), "Press to set +24h");
+          }
+          break;
+        }
+        case 5: {  // CLEAR RAIN
+          it.print(0, 18, id(oled_font_lg), "Clear rain");
+          it.print(0, 48, id(oled_font_sm), "Press to clear");
+          break;
+        }
+        case 6: {  // ARM / DISARM SCHEDULE
+          bool armed = id(esp_schedule_enabled).state;
+          it.print(0, 18, id(oled_font_lg), armed ? "Disarm" : "Arm");
+          it.print(0, 48, id(oled_font_sm), armed ? "Press to disable" : "Press to enable");
+          break;
+        }
+        default: {  // RUN ZONE i (card >= 7)
+          int zi = card - 7;
+          char title[20];
+          snprintf(title, sizeof(title), "Run zone %d", zi + 1);
+          it.print(0, 18, id(oled_font_lg), title);
+          const char *vn = id(${sprinkler_controller}).valve_name(zi);
+          if (vn != nullptr && vn[0] != '\0')
+            it.printf(0, 38, id(oled_font_sm), "%s", vn);
+          it.print(0, 48, id(oled_font_sm), "Press to start");
+          break;
+        }
       }

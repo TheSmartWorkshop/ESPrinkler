@@ -6,6 +6,11 @@
 # The `sprinkler:` block is the engine (sequencing, durations, pump). The `esprinkler:`
 # block is the brain (scheduler + unified state model) and points at the engine by id.
 
+# Many relay boards are active-LOW (a LOW input energizes the relay). Flip to "true"
+# without touching the rest of the config.
+substitutions:
+  relay_inverted: "false"
+
 esphome:
   name: esprinkler
   friendly_name: ESPrinkler
@@ -44,11 +49,36 @@ external_components:
 
 # Relay/valve switches (relay_1..4 + pump_relay). See packages/relays-gpio.yaml.
 switch:
-  - { platform: gpio, id: relay_1, pin: GPIO16, internal: true, restore_mode: ALWAYS_OFF }
-  - { platform: gpio, id: relay_2, pin: GPIO17, internal: true, restore_mode: ALWAYS_OFF }
-  - { platform: gpio, id: relay_3, pin: GPIO18, internal: true, restore_mode: ALWAYS_OFF }
-  - { platform: gpio, id: relay_4, pin: GPIO19, internal: true, restore_mode: ALWAYS_OFF }
-  - { platform: gpio, id: pump_relay, pin: GPIO21, internal: true, restore_mode: ALWAYS_OFF }
+  - platform: gpio
+    id: relay_1
+    pin: GPIO16
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: relay_2
+    pin: GPIO17
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: relay_3
+    pin: GPIO18
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: relay_4
+    pin: GPIO19
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: pump_relay
+    pin: GPIO21
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
 
 # --- The engine ------------------------------------------------------------------
 sprinkler:
