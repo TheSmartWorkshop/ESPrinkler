@@ -56,7 +56,12 @@ docs/                    Architecture, the entity contract, and hardware guidanc
    external_components:
      - source: github://TheSmartWorkshop/ESPrinkler@main
        components: [esprinkler]
+       refresh: always   # while @main is moving; drop / set to "1d" once you pin a tag
    ```
+   > ESPHome caches `github://` sources for **1 day** by default. While the project is
+   > moving against `@main`, set `refresh: always` so every `esphome compile` re-fetches
+   > the latest. If you're stuck on a stale build, delete
+   > `<your-config>/.esphome/external_components/` to force a fresh clone.
 2. Declare a `sprinkler:` controller (the engine) and point an `esprinkler:` block (the brain)
    at it, then add relay wiring and an optional display. Start from a file in
    [`examples/`](examples/) — they're validated end-to-end and `esphome compile`-tested.
