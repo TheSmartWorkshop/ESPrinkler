@@ -95,7 +95,9 @@ display:
     model: "SSD1306 128x64"
     address: 0x3C
     id: esprinkler_oled
-    update_interval: 200ms
+    # 1 s keeps the countdown + clock fresh without hogging the main loop on
+    # font rendering / I2C; encoder events trigger an immediate update below.
+    update_interval: 1s
     lambda: |-
       // Stacked clock at top-right; 12 vs 24-hour is the clock_format substitution.
       // ESP-IDF newlib's strftime has no %-I (no-pad hour), so 12-hour is built
@@ -360,6 +362,7 @@ sensor:
             } else {
               id(esp_ui_card) = (id(esp_ui_card) + 1) % 11;
             }
+        - component.update: esprinkler_oled
         - script.execute: esp_ui_idle
     on_anticlockwise:
       then:
@@ -371,6 +374,7 @@ sensor:
             } else {
               id(esp_ui_card) = (id(esp_ui_card) + 10) % 11;
             }
+        - component.update: esprinkler_oled
         - script.execute: esp_ui_idle
   - platform: uptime
     id: esp_uptime
@@ -453,6 +457,7 @@ binary_sensor:
                 id(esp_schedule_enabled).toggle();
               }
               // card == z + 6 (INFO): no press action
+          - component.update: esprinkler_oled
           - script.execute: esp_ui_idle
       # LONG press: from Status, cancel any active run. From ADJUST, exit without commit.
       - min_length: 801ms
@@ -476,6 +481,7 @@ binary_sensor:
                 id(esp_pending_stop_in_secs) = 0;
                 id(esp_pending_stop_valve) = -1;
               }
+          - component.update: esprinkler_oled
           - script.execute: esp_ui_idle
 
 # --- Web UI -------------------------------------------------------------------------

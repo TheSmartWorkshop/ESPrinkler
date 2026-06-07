@@ -97,7 +97,12 @@ display:
     model: ${oled_model}
     address: ${oled_address}
     id: esprinkler_oled
-    update_interval: 200ms
+    # 1 s is enough for the per-second countdown and per-minute clock; encoder
+    # events trigger an immediate component.update so navigation still feels
+    # snappy. Faster intervals (200 ms) burned a noticeable share of every loop
+    # rendering Roboto TTF + pushing the framebuffer over I2C, and that started
+    # to look like missed encoder rotations.
+    update_interval: 1s
     lambda: |-
       // Stacked clock at top-right ("HH:MM" / day-of-week). Two short right-aligned
       // lines keep enough headroom that the larger "ESPrinkler" header still fits.

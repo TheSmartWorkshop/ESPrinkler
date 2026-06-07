@@ -141,6 +141,7 @@ sensor:
               const int n = 7 + ${zone_count};
               id(esp_ui_card) = (id(esp_ui_card) + 1) % n;
             }
+        - component.update: esprinkler_oled
         - script.execute: esp_ui_idle
     on_anticlockwise:
       then:
@@ -153,6 +154,7 @@ sensor:
               const int n = 7 + ${zone_count};
               id(esp_ui_card) = (id(esp_ui_card) + n - 1) % n;
             }
+        - component.update: esprinkler_oled
         - script.execute: esp_ui_idle
 
 binary_sensor:
@@ -233,6 +235,7 @@ binary_sensor:
                 id(esp_schedule_enabled).toggle();
               }
               // card == z + 6 (INFO): no press action
+          - component.update: esprinkler_oled
           - script.execute: esp_ui_idle
       # LONG press: from Status, cancel any active run. From ADJUST, exit without commit.
       - min_length: 801ms
@@ -257,4 +260,5 @@ binary_sensor:
                 id(esp_pending_stop_in_secs) = 0;
                 id(esp_pending_stop_valve) = -1;
               }
+          - component.update: esprinkler_oled
           - script.execute: esp_ui_idle
