@@ -15,7 +15,7 @@ substitutions:
   zone_2_pin: GPIO17
   zone_3_pin: GPIO18
   zone_4_pin: GPIO19
-  pump_pin: GPIO21
+  pump_pin: GPIO23 # kept off GPIO21/22 so it composes with the I2C OLED package
 
 switch:
   - platform: gpio

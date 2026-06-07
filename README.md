@@ -61,8 +61,9 @@ docs/                    Architecture, the entity contract, and hardware guidanc
    packages:
      esprinkler_core: github://TheSmartWorkshop/ESPrinkler/packages/core.yaml@main
    ```
-2. Declare your zones, relay wiring, and (optionally) a display. Start from a file in
-   [`examples/`](examples/).
+2. Declare a `sprinkler:` controller (the engine) and point an `esprinkler:` block (the brain)
+   at it, then add relay wiring and an optional display. Start from a file in
+   [`examples/`](examples/) — they're validated end-to-end.
 3. Install the Lovelace card separately via HACS (see [`card/`](card/README.md)).
 
 ## Hardware

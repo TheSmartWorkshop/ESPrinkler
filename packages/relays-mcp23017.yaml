@@ -9,8 +9,8 @@
 
 substitutions:
   relay_inverted: "false"
-  i2c_sda: GPIO8
-  i2c_scl: GPIO9
+  i2c_sda: GPIO17 # kept clear of the LVGL package's SPI/control pins so they compose
+  i2c_scl: GPIO18
 
 i2c:
   sda: ${i2c_sda}

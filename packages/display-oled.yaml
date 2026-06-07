@@ -11,8 +11,8 @@
 # See examples/oled.yaml for a complete device using this package.
 
 substitutions:
-  oled_sda: GPIO8
-  oled_scl: GPIO9
+  oled_sda: GPIO21 # classic ESP32 default I2C; override for C3/S3 (e.g. GPIO8/GPIO9)
+  oled_scl: GPIO22
   oled_address: "0x3C"
   oled_model: "SSD1306 128x64"
 
