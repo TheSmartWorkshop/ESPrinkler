@@ -15,17 +15,29 @@ with ``sprinkler_id``. See ``examples/`` for full configs.
 """
 
 import esphome.codegen as cg
-from esphome.components import binary_sensor, sensor, text_sensor
+from esphome.components import binary_sensor, number, sensor, switch, text_sensor
 from esphome.components import time as time_
 from esphome.components.sprinkler import Sprinkler
 import esphome.config_validation as cv
-from esphome.const import CONF_ID, CONF_NAME, UNIT_SECOND
+from esphome.const import (
+    CONF_ID,
+    CONF_NAME,
+    ENTITY_CATEGORY_CONFIG,
+    UNIT_HOUR,
+    UNIT_SECOND,
+)
 
 CODEOWNERS = ["@TheSmartWorkshop"]
-AUTO_LOAD = ["text_sensor", "sensor", "binary_sensor"]
+AUTO_LOAD = ["text_sensor", "sensor", "binary_sensor", "number", "switch"]
 
 esprinkler_ns = cg.esphome_ns.namespace("esprinkler")
 ESPrinkler = esprinkler_ns.class_("ESPrinkler", cg.PollingComponent)
+RainDelayNumber = esprinkler_ns.class_(
+    "RainDelayNumber", number.Number, cg.Parented.template(ESPrinkler)
+)
+ScheduleEnabledSwitch = esprinkler_ns.class_(
+    "ScheduleEnabledSwitch", switch.Switch, cg.Parented.template(ESPrinkler)
+)
 
 # --- Config keys -----------------------------------------------------------------
 CONF_SPRINKLER_ID = "sprinkler_id"
@@ -43,6 +55,10 @@ CONF_PROGRAMS = "programs"
 CONF_START_TIME = "start_time"
 CONF_DAYS = "days"
 CONF_ENABLED = "enabled"
+CONF_RAIN_DELAY = "rain_delay"
+CONF_SCHEDULE_ENABLED = "schedule_enabled"
+
+RAIN_DELAY_MAX_HOURS = 168.0  # one week
 
 FLOW_TYPES = ["sprinkler", "drip"]
 
@@ -133,6 +149,11 @@ def _validate_scheduler_needs_time(config):
                 "a time_id is required when the scheduler has programs (the on-device "
                 "scheduler needs a real clock)"
             )
+    if CONF_RAIN_DELAY in config and CONF_TIME_ID not in config:
+        raise cv.Invalid(
+            "a time_id is required when rain_delay is set (the delay is anchored to "
+            "wall-clock time)"
+        )
     return config
 
 
@@ -155,6 +176,18 @@ CONFIG_SCHEMA = cv.All(
                 unit_of_measurement=UNIT_SECOND,
                 accuracy_decimals=0,
                 icon="mdi:timer-sand",
+            ),
+            cv.Optional(CONF_RAIN_DELAY): number.number_schema(
+                RainDelayNumber,
+                unit_of_measurement=UNIT_HOUR,
+                icon="mdi:weather-rainy",
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
+            cv.Optional(CONF_SCHEDULE_ENABLED): switch.switch_schema(
+                ScheduleEnabledSwitch,
+                icon="mdi:calendar-check",
+                default_restore_mode="RESTORE_DEFAULT_ON",
+                entity_category=ENTITY_CATEGORY_CONFIG,
             ),
             cv.Optional(CONF_ZONES): cv.ensure_list(ZONE_SCHEMA),
             cv.Optional(CONF_SCHEDULER): SCHEDULER_SCHEMA,
@@ -195,6 +228,21 @@ async def to_code(config):
                 await sensor.new_sensor(config[CONF_TOTAL_REMAINING])
             )
         )
+
+    if CONF_RAIN_DELAY in config:
+        rd = await number.new_number(
+            config[CONF_RAIN_DELAY],
+            min_value=0.0,
+            max_value=RAIN_DELAY_MAX_HOURS,
+            step=1.0,
+        )
+        await cg.register_parented(rd, var)
+        cg.add(var.set_rain_delay_number(rd))
+
+    if CONF_SCHEDULE_ENABLED in config:
+        se = await switch.new_switch(config[CONF_SCHEDULE_ENABLED])
+        await cg.register_parented(se, var)
+        cg.add(var.set_schedule_enabled_switch(se))
 
     for i, zone in enumerate(config.get(CONF_ZONES, [])):
         active = cg.nullptr

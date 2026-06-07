@@ -1,6 +1,6 @@
 # ESPrinkler Entity Contract
 
-**Contract version: `0.2.0`** — reconciled with the shipping implementation.
+**Contract version: `0.3.0`** — adds the rain-delay number and master schedule switch.
 
 This is the single most important document in the project. It defines the **entities and
 state** that an ESPrinkler device exposes — the interface that *every* consumer binds to:
@@ -62,10 +62,12 @@ override the names freely.
 
 | Logical entity | Domain | recommended `id` | esprinkler key | Semantics |
 | --- | --- | --- | --- | --- |
-| Controller state | `text_sensor` | `esp_state` | `state` | `idle` / `running` / `manual` / `paused` |
+| Controller state | `text_sensor` | `esp_state` | `state` | `idle` / `running` / `manual` / `paused` / `rain_delay` |
 | Active zone | `text_sensor` | `esp_active_zone` | `active_zone` | name of the running zone, or `—` |
 | Next run | `text_sensor` | `esp_next_run` | `next_run` | e.g. `Today 06:00`, `Tomorrow 05:30` |
 | Total remaining | `sensor` (s) | `esp_total_remaining` | `total_remaining` | active valve + queued time |
+| Rain delay | `number` (h) | `esp_rain_delay` | `rain_delay` | hours remaining; write N to delay, write 0 to clear. Auto-clears when expired; persists across reboots. |
+| Schedule armed | `switch` | `esp_schedule_enabled` | `schedule_enabled` | master arm/disarm above per-program `enabled`. Defaults on; restored from flash. |
 
 ### Per-zone (brain), for each `zones:` entry
 
@@ -113,16 +115,27 @@ first, then bind the UI.
 
 ---
 
+## Rain delay & schedule arming
+
+Both gate the on-device scheduler only — they never block a manual run from HA, an LVGL
+button, or the `sprinkler.*` actions. While `esp_rain_delay > 0` or `esp_schedule_enabled`
+is off, scheduled programs are silently skipped (no `start_full_cycle()` fires).
+
+The rain delay is anchored to wall-clock time (it needs a `time_id`) and survives a reboot;
+the brain auto-clears it when the wall clock catches up and republishes `esp_rain_delay = 0`
+at that point. The schedule switch uses the standard ESPHome restore mode (defaults to
+`RESTORE_DEFAULT_ON`).
+
 ## Not yet implemented (reserved)
 
-These appear in the long-term design but are **not** in `0.2.0`; they're listed so names stay
+These appear in the long-term design but are **not** in `0.3.0`; they're listed so names stay
 stable when added:
 
-- **Rain delay** (`number`, hours) — suspend the schedule. Planned brain entity `esp_rain_delay`.
-- **Schedule-enabled** master switch — a global arm/disarm above per-program `enabled`.
-  (For now, toggle programs individually, or gate via an HA automation.) Planned `esp_schedule_enabled`.
 - **Per-zone flow metering** (`esp_zone_{i}_flow`, gallons) — out of scope for v1.
 - **Flow / rain sensor gating** input (`esp_flow_ok`).
+- **Runtime-editable scheduler** — programs are currently fixed at compile time. A future
+  revision will move them to a writable, flash-persisted store so the LVGL UI / card / HA can
+  add/remove/edit programs at runtime.
 
 ## Open questions
 

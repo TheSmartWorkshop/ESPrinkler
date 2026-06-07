@@ -1,7 +1,9 @@
 import { LitElement, html, css, nothing, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "custom-card-helpers";
-import type { ESPrinklerCardConfig, ZoneConfig } from "./types";
+import type { ESPrinklerCardConfig, ZoneConfig, ZoneMapConfig } from "./types";
+
+const CARD_VERSION = "0.2.0";
 
 const STATE_ICON: Record<string, string> = {
   idle: "mdi:water-off",
@@ -20,11 +22,20 @@ export class ESPrinklerCard extends LitElement {
     if (!config || !Array.isArray(config.zones) || config.zones.length === 0) {
       throw new Error("esprinkler-card: you must define at least one zone");
     }
+    if (config.zone_map && !config.zone_map.image) {
+      throw new Error("esprinkler-card: zone_map.image is required when zone_map is set");
+    }
     this.config = config;
   }
 
   public getCardSize(): number {
-    return 2 + (this.config?.zones.length ?? 0);
+    const map = this.config?.zone_map ? 4 : 0;
+    return 2 + map + (this.config?.zones.length ?? 0);
+  }
+
+  private runZone(zone: ZoneConfig): void {
+    if (zone.run) this.pressButton(zone.run);
+    else if (zone.valve) this.toggleSwitch(zone.valve);
   }
 
   // --- helpers ---------------------------------------------------------------
@@ -110,11 +121,40 @@ export class ESPrinklerCard extends LitElement {
               : nothing}
           </div>
 
+          ${this.config.zone_map ? this.renderZoneMap(this.config.zone_map) : nothing}
+
           <div class="zones">
             ${this.config.zones.map((z) => this.renderZone(z))}
           </div>
         </div>
       </ha-card>
+    `;
+  }
+
+  private renderZoneMap(map: ZoneMapConfig): TemplateResult {
+    const ratioStyle = map.aspect_ratio ? `aspect-ratio: ${map.aspect_ratio};` : "";
+    return html`
+      <div class="zone-map" style=${ratioStyle}>
+        <img src=${map.image} alt="Yard layout" draggable="false" />
+        ${this.config.zones.map((z) => {
+          const pos = z.map_position;
+          if (!pos) return nothing;
+          const active = this.isOn(z.active) || this.isOn(z.valve);
+          const remaining = this.fmtRemaining(z.remaining);
+          const label = z.name ?? "Zone";
+          return html`
+            <button
+              class="map-pin ${active ? "active" : ""}"
+              style="left: ${pos.x}%; top: ${pos.y}%"
+              @click=${() => this.runZone(z)}
+              title=${label}
+            >
+              <ha-icon icon=${active ? "mdi:sprinkler-variant" : "mdi:sprinkler"}></ha-icon>
+              <span class="map-pin-label">${label}${active && remaining ? ` · ${remaining}` : ""}</span>
+            </button>
+          `;
+        })}
+      </div>
     `;
   }
 
@@ -245,6 +285,52 @@ export class ESPrinklerCard extends LitElement {
       align-items: center;
       gap: 4px;
     }
+    .zone-map {
+      position: relative;
+      width: 100%;
+      margin: 8px 0 12px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--secondary-background-color);
+    }
+    .zone-map img {
+      display: block;
+      width: 100%;
+      height: auto;
+      user-select: none;
+    }
+    .map-pin {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.55);
+      color: #fff;
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 120ms ease, box-shadow 120ms ease;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    }
+    .map-pin:hover {
+      background: rgba(0, 0, 0, 0.75);
+    }
+    .map-pin.active {
+      background: var(--primary-color);
+      color: var(--text-primary-color, #fff);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.4),
+        0 0 12px 2px var(--primary-color);
+    }
+    .map-pin ha-icon {
+      --mdc-icon-size: 18px;
+    }
+    .map-pin-label {
+      white-space: nowrap;
+    }
   `;
 }
 
@@ -256,4 +342,8 @@ export class ESPrinklerCard extends LitElement {
   description: "Zone control and scheduling for an ESPrinkler irrigation controller.",
 });
 
-console.info("%c ESPRINKLER-CARD %c 0.1.0 ", "background:#0277bd;color:#fff", "color:#0277bd");
+console.info(
+  `%c ESPRINKLER-CARD %c ${CARD_VERSION} `,
+  "background:#0277bd;color:#fff",
+  "color:#0277bd",
+);

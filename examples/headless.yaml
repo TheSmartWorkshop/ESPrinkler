@@ -108,6 +108,10 @@ esprinkler:
     name: "Next Run"
   total_remaining:
     name: "Total Time Remaining"
+  rain_delay:
+    name: "Rain Delay"
+  schedule_enabled:
+    name: "Schedule Enabled"
   zones:
     - name: "Front Lawn"
       flow_type: sprinkler

@@ -105,6 +105,8 @@ esprinkler:
   active_zone: { name: "Active Zone", id: esp_active_zone }
   next_run: { name: "Next Run", id: esp_next_run }
   total_remaining: { name: "Total Time Remaining", id: esp_total_remaining }
+  rain_delay: { name: "Rain Delay", id: esp_rain_delay }
+  schedule_enabled: { name: "Schedule Enabled", id: esp_schedule_enabled }
   zones:
     - { name: "Front Lawn", flow_type: sprinkler, active: { name: "Front Lawn Active" }, remaining: { name: "Front Lawn Remaining" } }
     - { name: "Back Lawn", flow_type: sprinkler, active: { name: "Back Lawn Active" }, remaining: { name: "Back Lawn Remaining" } }
@@ -116,6 +118,9 @@ esprinkler:
         days: [mon, wed, fri, sun]
 
 # --- LVGL touchscreen UI ---------------------------------------------------------
+# Three-tab UI: Status / Zones / Schedule. Mirrors packages/display-lvgl.yaml but
+# adds a per-zone tile page (zones are static because LVGL widget trees are built
+# at compile time; if you change zone count, update this block to match).
 lvgl:
   rotation: 90
   displays:
@@ -125,59 +130,202 @@ lvgl:
   pages:
     - id: home_page
       widgets:
-        - label:
-            id: lbl_title
-            text: "ESPrinkler"
-            align: TOP_MID
-            y: 4
-        - label:
-            id: lbl_state
-            align: TOP_LEFT
-            x: 8
-            y: 40
-            text: !lambda |-
-              return "State: " + (id(esp_state).has_state() ? id(esp_state).state : std::string("—"));
-        - label:
-            id: lbl_zone
-            align: TOP_LEFT
-            x: 8
-            y: 70
-            text: !lambda |-
-              return "Zone: " + (id(esp_active_zone).has_state() ? id(esp_active_zone).state : std::string("—"));
-        - label:
-            id: lbl_remaining
-            align: TOP_LEFT
-            x: 8
-            y: 100
-            text: !lambda |-
-              if (!id(esp_total_remaining).has_state()) return std::string("Left: —");
-              int s = (int) id(esp_total_remaining).state;
-              char buf[24];
-              snprintf(buf, sizeof(buf), "Left: %d:%02d", s / 60, s % 60);
-              return std::string(buf);
-        - button:
-            id: btn_start
-            align: BOTTOM_LEFT
-            x: 8
-            y: -8
-            width: 140
-            height: 50
-            widgets:
-              - label:
-                  text: "START ALL"
-                  align: CENTER
-            on_click:
-              - sprinkler.start_full_cycle: yard
-        - button:
-            id: btn_stop
-            align: BOTTOM_RIGHT
-            x: -8
-            y: -8
-            width: 140
-            height: 50
-            widgets:
-              - label:
-                  text: "STOP"
-                  align: CENTER
-            on_click:
-              - sprinkler.shutdown: yard
+        - tabview:
+            id: main_tabs
+            position: top
+            size: 14%
+            tabs:
+              # ---------- Status tab ------------------------------------------------
+              - id: tab_status
+                name: "Status"
+                widgets:
+                  - label:
+                      align: TOP_LEFT
+                      x: 8
+                      y: 4
+                      text: !lambda |-
+                        return "State: " + (id(esp_state).has_state() ? id(esp_state).state : std::string("—"));
+                  - label:
+                      align: TOP_LEFT
+                      x: 8
+                      y: 32
+                      text: !lambda |-
+                        return "Zone: " + (id(esp_active_zone).has_state() ? id(esp_active_zone).state : std::string("—"));
+                  - label:
+                      align: TOP_LEFT
+                      x: 8
+                      y: 60
+                      text: !lambda |-
+                        if (!id(esp_total_remaining).has_state()) return std::string("Left: —");
+                        int s = (int) id(esp_total_remaining).state;
+                        char buf[24];
+                        snprintf(buf, sizeof(buf), "Left: %d:%02d", s / 60, s % 60);
+                        return std::string(buf);
+                  - label:
+                      align: TOP_LEFT
+                      x: 8
+                      y: 88
+                      text: !lambda |-
+                        return "Next: " + (id(esp_next_run).has_state() ? id(esp_next_run).state : std::string("—"));
+                  - button:
+                      align: BOTTOM_LEFT
+                      x: 4
+                      y: -8
+                      width: 96
+                      height: 44
+                      widgets:
+                        - label: { text: "START", align: CENTER }
+                      on_click:
+                        - sprinkler.start_full_cycle: yard
+                  - button:
+                      align: BOTTOM_MID
+                      y: -8
+                      width: 96
+                      height: 44
+                      widgets:
+                        - label: { text: "PAUSE", align: CENTER }
+                      on_click:
+                        - sprinkler.pause: yard
+                  - button:
+                      align: BOTTOM_RIGHT
+                      x: -4
+                      y: -8
+                      width: 96
+                      height: 44
+                      widgets:
+                        - label: { text: "STOP", align: CENTER }
+                      on_click:
+                        - sprinkler.shutdown: yard
+              # ---------- Zones tab -------------------------------------------------
+              # Tap "Run" on any tile to start that valve alone for its configured
+              # duration. The label hand-rolls a 1-of-N "running" marker.
+              - id: tab_zones
+                name: "Zones"
+                widgets:
+                  - button:
+                      align: TOP_LEFT
+                      x: 4
+                      y: 4
+                      width: 148
+                      height: 56
+                      widgets:
+                        - label:
+                            align: CENTER
+                            text: !lambda |-
+                              std::string n = id(esp_active_zone).state;
+                              return std::string("Front Lawn") + (n == "Front Lawn" ? "  ●" : "");
+                      on_click:
+                        - sprinkler.start_single_valve: { id: yard, valve_number: 0 }
+                  - button:
+                      align: TOP_RIGHT
+                      x: -4
+                      y: 4
+                      width: 148
+                      height: 56
+                      widgets:
+                        - label:
+                            align: CENTER
+                            text: !lambda |-
+                              std::string n = id(esp_active_zone).state;
+                              return std::string("Back Lawn") + (n == "Back Lawn" ? "  ●" : "");
+                      on_click:
+                        - sprinkler.start_single_valve: { id: yard, valve_number: 1 }
+                  - button:
+                      align: LEFT_MID
+                      x: 4
+                      y: 8
+                      width: 148
+                      height: 56
+                      widgets:
+                        - label:
+                            align: CENTER
+                            text: !lambda |-
+                              std::string n = id(esp_active_zone).state;
+                              return std::string("Flower Beds") + (n == "Flower Beds" ? "  ●" : "");
+                      on_click:
+                        - sprinkler.start_single_valve: { id: yard, valve_number: 2 }
+                  - button:
+                      align: RIGHT_MID
+                      x: -4
+                      y: 8
+                      width: 148
+                      height: 56
+                      widgets:
+                        - label:
+                            align: CENTER
+                            text: !lambda |-
+                              std::string n = id(esp_active_zone).state;
+                              return std::string("Veg Garden") + (n == "Veg Garden" ? "  ●" : "");
+                      on_click:
+                        - sprinkler.start_single_valve: { id: yard, valve_number: 3 }
+                  - button:
+                      align: BOTTOM_MID
+                      y: -8
+                      width: 200
+                      height: 44
+                      widgets:
+                        - label: { text: "STOP", align: CENTER }
+                      on_click:
+                        - sprinkler.shutdown: yard
+              # ---------- Schedule tab ----------------------------------------------
+              - id: tab_schedule
+                name: "Schedule"
+                widgets:
+                  - label:
+                      align: TOP_LEFT
+                      x: 8
+                      y: 4
+                      text: !lambda |-
+                        return "Next: " + (id(esp_next_run).has_state() ? id(esp_next_run).state : std::string("—"));
+                  - label:
+                      align: TOP_LEFT
+                      x: 8
+                      y: 32
+                      text: !lambda |-
+                        if (!id(esp_rain_delay).has_state()) return std::string("Rain delay: —");
+                        int h = (int) id(esp_rain_delay).state;
+                        char buf[32];
+                        if (h <= 0) snprintf(buf, sizeof(buf), "Rain delay: off");
+                        else snprintf(buf, sizeof(buf), "Rain delay: %dh remaining", h);
+                        return std::string(buf);
+                  - label:
+                      align: TOP_LEFT
+                      x: 8
+                      y: 60
+                      text: !lambda |-
+                        bool on = id(esp_schedule_enabled).state;
+                        return std::string("Schedule: ") + (on ? "armed" : "OFF");
+                  - button:
+                      align: BOTTOM_LEFT
+                      x: 4
+                      y: -56
+                      width: 140
+                      height: 44
+                      widgets:
+                        - label: { text: "+24h Rain", align: CENTER }
+                      on_click:
+                        - number.set: { id: esp_rain_delay, value: 24 }
+                  - button:
+                      align: BOTTOM_RIGHT
+                      x: -4
+                      y: -56
+                      width: 140
+                      height: 44
+                      widgets:
+                        - label: { text: "Clear delay", align: CENTER }
+                      on_click:
+                        - number.set: { id: esp_rain_delay, value: 0 }
+                  - button:
+                      align: BOTTOM_MID
+                      y: -8
+                      width: 200
+                      height: 44
+                      widgets:
+                        - label:
+                            align: CENTER
+                            text: !lambda |-
+                              return id(esp_schedule_enabled).state
+                                ? std::string("Disarm schedule")
+                                : std::string("Arm schedule");
+                      on_click:
+                        - switch.toggle: esp_schedule_enabled

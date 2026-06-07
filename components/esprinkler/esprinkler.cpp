@@ -7,6 +7,19 @@ namespace esprinkler {
 static const char *const TAG = "esprinkler";
 static const char *const DAY_NAMES[7] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
+// Stable per-instance preference id for the rain-delay end timestamp.
+static const uint32_t RAIN_DELAY_PREF_TAG = 0xE5'A7'1D'A1;
+
+void RainDelayNumber::control(float value) {
+  this->publish_state(value);
+  this->parent_->on_rain_delay_set(value);
+}
+
+void ScheduleEnabledSwitch::write_state(bool state) {
+  this->publish_state(state);
+  this->parent_->on_schedule_enabled_set(state);
+}
+
 void ESPrinkler::add_zone_sensors(size_t index, binary_sensor::BinarySensor *active,
                                   sensor::Sensor *remaining) {
   if (this->zones_.size() <= index)
@@ -20,6 +33,25 @@ void ESPrinkler::setup() {
     this->mark_failed();
     return;
   }
+
+  // Restore rain-delay end-time across reboots.
+  if (this->rain_delay_number_ != nullptr) {
+    this->rain_delay_pref_ =
+        global_preferences->make_preference<uint32_t>(RAIN_DELAY_PREF_TAG, true);
+    uint32_t until = 0;
+    if (this->rain_delay_pref_.load(&until))
+      this->rain_delay_until_ = until;
+    this->rain_delay_number_->publish_state(this->remaining_rain_delay_hours_());
+    this->last_rain_delay_published_ = this->rain_delay_number_->state;
+  }
+
+  // Restore schedule-enabled (uses the switch's own restore-mode preference).
+  if (this->schedule_enabled_switch_ != nullptr) {
+    auto restored = this->schedule_enabled_switch_->get_initial_state_with_restore_mode();
+    this->schedule_enabled_ = restored.value_or(true);
+    this->schedule_enabled_switch_->publish_state(this->schedule_enabled_);
+  }
+
   ESP_LOGCONFIG(TAG, "ESPrinkler ready: %u zone sensor slot(s), %u scheduler program(s)",
                 (unsigned) this->zones_.size(), (unsigned) this->programs_.size());
 }
@@ -34,18 +66,31 @@ void ESPrinkler::update() {
 void ESPrinkler::publish_state_() {
   const optional<size_t> active = this->sprinkler_->active_valve();
 
-  // Controller state.
+  // Controller state. Watering states win over rain_delay so the user always
+  // sees what the valves are doing right now.
   std::string state;
   if (this->sprinkler_->paused_valve().has_value()) {
     state = "paused";
   } else if (active.has_value()) {
     state = this->sprinkler_->manual_valve().has_value() ? "manual" : "running";
+  } else if (this->is_rain_delayed_()) {
+    state = "rain_delay";
   } else {
     state = "idle";
   }
   if (this->state_ts_ != nullptr && state != this->last_state_) {
     this->state_ts_->publish_state(state);
     this->last_state_ = state;
+  }
+
+  // Decrementing rain-delay countdown. Republish only when the displayed integer
+  // hour rolls over so we don't spam the bus every second.
+  if (this->rain_delay_number_ != nullptr) {
+    float h = this->remaining_rain_delay_hours_();
+    if (h != this->last_rain_delay_published_) {
+      this->rain_delay_number_->publish_state(h);
+      this->last_rain_delay_published_ = h;
+    }
   }
 
   // Active zone name.
@@ -102,6 +147,13 @@ void ESPrinkler::run_scheduler_() {
   if (!now.is_valid())
     return;
 
+  // Master gates. These do NOT affect manual runs (HA / on-device buttons /
+  // sprinkler.start_full_cycle action) — only on-device scheduled fires.
+  if (!this->schedule_enabled_)
+    return;
+  if (this->is_rain_delayed_())
+    return;
+
   const int dow = now.day_of_week;  // 1 (Sun) .. 7 (Sat)
   // Already handled this wall-clock minute? Don't refire on the per-second poll.
   if (now.minute == this->last_trigger_minute_ && dow == this->last_trigger_dow_)
@@ -129,6 +181,47 @@ void ESPrinkler::run_scheduler_() {
     this->sprinkler_->start_full_cycle();
     return;
   }
+}
+
+void ESPrinkler::on_rain_delay_set(float hours) {
+  if (hours <= 0.0f || this->time_ == nullptr) {
+    this->rain_delay_until_ = 0;
+  } else {
+    ESPTime now = this->time_->now();
+    if (!now.is_valid()) {
+      ESP_LOGW(TAG, "Rain delay set but clock is not valid yet; ignored");
+      return;
+    }
+    this->rain_delay_until_ = now.timestamp + (uint32_t)(hours * 3600.0f);
+    ESP_LOGI(TAG, "Rain delay set: %.1fh (until epoch %u)", hours,
+             (unsigned) this->rain_delay_until_);
+  }
+  this->rain_delay_pref_.save(&this->rain_delay_until_);
+}
+
+void ESPrinkler::on_schedule_enabled_set(bool enabled) {
+  this->schedule_enabled_ = enabled;
+  ESP_LOGI(TAG, "Schedule %s", enabled ? "enabled" : "disabled");
+}
+
+float ESPrinkler::remaining_rain_delay_hours_() {
+  if (this->rain_delay_until_ == 0)
+    return 0.0f;
+  if (this->time_ == nullptr)
+    return 0.0f;
+  ESPTime now = this->time_->now();
+  if (!now.is_valid())
+    return 0.0f;
+  if (now.timestamp >= this->rain_delay_until_) {
+    // Auto-clear once we've caught up.
+    this->rain_delay_until_ = 0;
+    this->rain_delay_pref_.save(&this->rain_delay_until_);
+    ESP_LOGI(TAG, "Rain delay expired; scheduler resumes");
+    return 0.0f;
+  }
+  // Round up so a "12h" delay shows 12 → 11 → ... rather than disappearing 0.99 in.
+  const uint32_t secs = this->rain_delay_until_ - now.timestamp;
+  return (float) ((secs + 3599) / 3600);
 }
 
 std::string ESPrinkler::compute_next_run_() {

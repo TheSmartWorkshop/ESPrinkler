@@ -4,9 +4,10 @@ A flexible, **ESPHome-based multi-zone irrigation controller** for the ESP32, bu
 integrate natively with **Home Assistant** — and to run your watering schedule entirely
 on-device, with or without HA online.
 
-> **Status:** early scaffolding. The repository layout, the [entity contract](docs/entity-contract.md),
-> and the architecture are defined; the C++ component and YAML packages are stubs under
-> active development. Nothing here flashes a working controller *yet*.
+> **Status:** end-to-end implementation in place against ESPHome **2026.5.3**, validated
+> with a real firmware compile + link. The C++ brain, the relay/OLED/LVGL packages, the
+> three example configs, and the Lovelace card are all present and pass CI. Real hardware
+> flash is the only remaining bench test.
 
 ## What it is
 
@@ -50,20 +51,15 @@ docs/                    Architecture, the entity contract, and hardware guidanc
 
 ## Getting started
 
-> Not usable yet — this section describes the intended flow once the component lands.
-
-1. Add ESPrinkler as an external component and pull in the core package:
+1. Add ESPrinkler as an external component:
    ```yaml
    external_components:
      - source: github://TheSmartWorkshop/ESPrinkler@main
        components: [esprinkler]
-
-   packages:
-     esprinkler_core: github://TheSmartWorkshop/ESPrinkler/packages/core.yaml@main
    ```
 2. Declare a `sprinkler:` controller (the engine) and point an `esprinkler:` block (the brain)
    at it, then add relay wiring and an optional display. Start from a file in
-   [`examples/`](examples/) — they're validated end-to-end.
+   [`examples/`](examples/) — they're validated end-to-end and `esphome compile`-tested.
 3. Install the Lovelace card separately via HACS (see [`card/`](card/README.md)).
 
 ## Hardware
