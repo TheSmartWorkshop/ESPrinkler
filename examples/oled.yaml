@@ -5,12 +5,12 @@
 # a card-stack UI (rotate = switch card, press = activate). All ids match the conventions
 # expected by packages/display-oled.yaml and packages/input-encoder.yaml.
 
-# Flip to "true" for active-low relay boards (a LOW input energizes the relay).
-# clock_format is a strftime string: "%H:%M" for 24-hour, "%-I:%M%p" for 12-hour.
-# web_pin is what's displayed on the Info card; set the matching auth in web_server below.
+# Flip relay_inverted to "true" for active-low relay boards.
+# clock_format: "24" for 24-hour (default), "12" for 12-hour with AM/PM.
+# web_pin is shown on the Info card; set the matching auth in web_server below.
 substitutions:
   relay_inverted: "false"
-  clock_format: "%H:%M"
+  clock_format: "24"
   web_pin: "(not set)"
 
 esphome:
@@ -98,14 +98,21 @@ display:
     update_interval: 200ms
     lambda: |-
       // Stacked clock at top-right; 12 vs 24-hour is the clock_format substitution.
-      // Day-of-week only (short) keeps the right column narrow enough that the
-      // larger "ESPrinkler" header on Status doesn't crash into it.
+      // ESP-IDF newlib's strftime has no %-I (no-pad hour), so 12-hour is built
+      // by hand with snprintf and 24-hour goes through strftime.
       {
         ESPTime now = id(sntp_time).now();
         char tb[12] = "--:--";
         char db[8] = " ";
         if (now.is_valid()) {
-          now.strftime(tb, sizeof(tb), "${clock_format}");
+          if (std::string("${clock_format}") == "12") {
+            int h = now.hour;
+            int h12 = h % 12;
+            if (h12 == 0) h12 = 12;
+            snprintf(tb, sizeof(tb), "%d:%02d%s", h12, now.minute, h >= 12 ? "PM" : "AM");
+          } else {
+            now.strftime(tb, sizeof(tb), "%H:%M");
+          }
           now.strftime(db, sizeof(db), "%a");
         }
         it.print(128, 0, id(oled_font_sm), TextAlign::TOP_RIGHT, tb);
