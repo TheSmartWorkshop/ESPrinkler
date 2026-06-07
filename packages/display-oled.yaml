@@ -4,11 +4,12 @@
 # It RENDERS the entity-contract state; it does not compute it.
 #
 # Cooperates with the optional packages/input-encoder.yaml: this package owns the
-# `esp_ui_card` global; the encoder writes it (rotate cycles cards, press activates).
-# Without an encoder the card stays at 0 and you get the Status screen.
+# `esp_ui_card`, `esp_ui_mode`, and `esp_ui_adjust_target` globals; the encoder
+# writes them (rotate cycles cards or adjusts run time, press activates). Without an
+# encoder the card stays at 0 and you get the Status screen.
 #
 # CONVENTION: this package binds to entities by id. Your config must define these ids:
-#   - text_sensor id: esp_state          (esprinkler: state:)
+#   - text_sensor id: esp_state           (esprinkler: state:)
 #   - text_sensor id: esp_active_zone     (esprinkler: active_zone:)
 #   - text_sensor id: esp_next_run        (esprinkler: next_run:)
 #   - sensor      id: esp_total_remaining (esprinkler: total_remaining:)
@@ -28,9 +29,19 @@ substitutions:
   zone_count: "4"
 
 # Card-stack UI state. Card 0 = STATUS; the rest are encoder-driven action cards.
-# See packages/input-encoder.yaml for the card numbering and what press does.
+# esp_ui_mode: 0 = browsing cards, 1 = ADJUST (countdown + dial changes run length).
+# esp_ui_adjust_target: target run duration in seconds, written by the encoder while
+#   in ADJUST mode and read by the lambda below.
 globals:
   - id: esp_ui_card
+    type: int
+    restore_value: false
+    initial_value: "0"
+  - id: esp_ui_mode
+    type: int
+    restore_value: false
+    initial_value: "0"
+  - id: esp_ui_adjust_target
     type: int
     restore_value: false
     initial_value: "0"
@@ -54,19 +65,37 @@ display:
     id: esprinkler_oled
     update_interval: 200ms
     lambda: |-
-      // Always-visible clock at top-right (shortened to "Day HH:MM").
+      // Stacked clock at top-right ("HH:MM" / "Day M/D"), visible on every card.
+      // Two short right-aligned lines fit cleanly alongside a small left-side header.
       {
         ESPTime now = id(${time_id}).now();
         char tb[12] = "--:--";
-        if (now.is_valid())
-          now.strftime(tb, sizeof(tb), "%a %H:%M");
+        char db[16] = " ";
+        if (now.is_valid()) {
+          now.strftime(tb, sizeof(tb), "%H:%M");
+          now.strftime(db, sizeof(db), "%a %m/%d");
+        }
         it.print(128, 0, id(oled_font_sm), TextAlign::TOP_RIGHT, tb);
+        it.print(128, 12, id(oled_font_sm), TextAlign::TOP_RIGHT, db);
+      }
+
+      // ADJUST mode trumps the card stack: live countdown + edit indicator.
+      if (id(esp_ui_mode) == 1) {
+        std::string zone = id(esp_active_zone).has_state() ? id(esp_active_zone).state : "—";
+        it.print(0, 0, id(oled_font_sm), "Adjust run");
+        it.printf(0, 14, id(oled_font_sm), "%s", zone.c_str());
+        int t = id(esp_ui_adjust_target);
+        if (t < 0) t = 0;
+        char buf[10];
+        snprintf(buf, sizeof(buf), "%d:%02d", t / 60, t % 60);
+        it.print(0, 28, id(oled_font_lg), buf);
+        it.print(0, 52, id(oled_font_sm), "Turn dial +/-1m");
+        return;
       }
 
       const int total_cards = 7 + ${zone_count};
-      const int card = id(esp_ui_card) % total_cards;
+      const int card = ((id(esp_ui_card) % total_cards) + total_cards) % total_cards;
 
-      // Bottom-line page indicator ("N/M") on every non-status card.
       if (card != 0) {
         char ind[12];
         snprintf(ind, sizeof(ind), "%d/%d", card + 1, total_cards);
@@ -74,13 +103,13 @@ display:
       }
 
       switch (card) {
-        case 0: {  // STATUS
-          it.print(0, 0, id(oled_font_lg), "ESPrinkler");
+        case 0: {  // STATUS — small header keeps room for the stacked clock.
+          it.print(0, 0, id(oled_font_sm), "ESPrinkler");
           std::string st = id(esp_state).has_state() ? id(esp_state).state : "—";
-          it.printf(0, 24, id(oled_font_sm), "State: %s", st.c_str());
+          it.printf(0, 26, id(oled_font_sm), "State: %s", st.c_str());
           if (st == "running" || st == "manual") {
             std::string zone = id(esp_active_zone).has_state() ? id(esp_active_zone).state : "—";
-            it.printf(0, 38, id(oled_font_sm), "Zone: %s", zone.c_str());
+            it.printf(0, 40, id(oled_font_sm), "Zone: %s", zone.c_str());
             if (id(esp_total_remaining).has_state()) {
               int secs = (int) id(esp_total_remaining).state;
               it.printf(0, 52, id(oled_font_sm), "Left: %d:%02d", secs / 60, secs % 60);
@@ -91,52 +120,49 @@ display:
           }
           break;
         }
-        case 1: {  // START ALL
-          it.print(0, 18, id(oled_font_lg), "Start all");
-          it.print(0, 48, id(oled_font_sm), "Press to run cycle");
+        case 1:
+          it.print(0, 26, id(oled_font_lg), "Start all");
+          it.print(0, 52, id(oled_font_sm), "Press to run cycle");
           break;
-        }
-        case 2: {  // STOP
-          it.print(0, 18, id(oled_font_lg), "Stop");
-          it.print(0, 48, id(oled_font_sm), "Press to shut down");
+        case 2:
+          it.print(0, 26, id(oled_font_lg), "Stop");
+          it.print(0, 52, id(oled_font_sm), "Press to shut down");
           break;
-        }
-        case 3: {  // PAUSE / RESUME
+        case 3: {
           bool paused = id(esp_state).has_state() && id(esp_state).state == "paused";
-          it.print(0, 18, id(oled_font_lg), paused ? "Resume" : "Pause");
-          it.print(0, 48, id(oled_font_sm), paused ? "Press to resume" : "Press to pause");
+          it.print(0, 26, id(oled_font_lg), paused ? "Resume" : "Pause");
+          it.print(0, 52, id(oled_font_sm), paused ? "Press to resume" : "Press to pause");
           break;
         }
-        case 4: {  // +24H RAIN
-          it.print(0, 18, id(oled_font_lg), "+24h rain");
+        case 4: {
+          it.print(0, 26, id(oled_font_lg), "+24h rain");
           if (id(esp_rain_delay).has_state() && (int) id(esp_rain_delay).state > 0) {
             int h = (int) id(esp_rain_delay).state;
-            it.printf(0, 48, id(oled_font_sm), "Now: %dh remaining", h);
+            it.printf(0, 52, id(oled_font_sm), "Now: %dh remaining", h);
           } else {
-            it.print(0, 48, id(oled_font_sm), "Press to set +24h");
+            it.print(0, 52, id(oled_font_sm), "Press to set +24h");
           }
           break;
         }
-        case 5: {  // CLEAR RAIN
-          it.print(0, 18, id(oled_font_lg), "Clear rain");
-          it.print(0, 48, id(oled_font_sm), "Press to clear");
+        case 5:
+          it.print(0, 26, id(oled_font_lg), "Clear rain");
+          it.print(0, 52, id(oled_font_sm), "Press to clear");
           break;
-        }
-        case 6: {  // ARM / DISARM SCHEDULE
+        case 6: {
           bool armed = id(esp_schedule_enabled).state;
-          it.print(0, 18, id(oled_font_lg), armed ? "Disarm" : "Arm");
-          it.print(0, 48, id(oled_font_sm), armed ? "Press to disable" : "Press to enable");
+          it.print(0, 26, id(oled_font_lg), armed ? "Disarm" : "Arm");
+          it.print(0, 52, id(oled_font_sm), armed ? "Press to disable" : "Press to enable");
           break;
         }
         default: {  // RUN ZONE i (card >= 7)
           int zi = card - 7;
           char title[20];
-          snprintf(title, sizeof(title), "Run zone %d", zi + 1);
-          it.print(0, 18, id(oled_font_lg), title);
+          snprintf(title, sizeof(title), "Zone %d", zi + 1);
+          it.print(0, 26, id(oled_font_lg), title);
           const char *vn = id(${sprinkler_controller}).valve_name(zi);
           if (vn != nullptr && vn[0] != '\0')
-            it.printf(0, 38, id(oled_font_sm), "%s", vn);
-          it.print(0, 48, id(oled_font_sm), "Press to start");
+            it.printf(0, 14, id(oled_font_sm), "%s", vn);
+          it.print(0, 52, id(oled_font_sm), "Press to run");
           break;
         }
       }

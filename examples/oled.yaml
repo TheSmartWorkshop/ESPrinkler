@@ -93,13 +93,31 @@ display:
     id: esprinkler_oled
     update_interval: 200ms
     lambda: |-
-      // Clock at top-right of every card ("Day HH:MM"); the rotary encoder
-      // drives esp_ui_card and the body below renders the matching screen.
+      // Stacked clock at top-right ("HH:MM" / "Day M/D"). Two short right-aligned
+      // lines fit cleanly alongside a small left-side header without overlap.
       {
         ESPTime now = id(sntp_time).now();
         char tb[12] = "--:--";
-        if (now.is_valid()) now.strftime(tb, sizeof(tb), "%a %H:%M");
+        char db[16] = " ";
+        if (now.is_valid()) {
+          now.strftime(tb, sizeof(tb), "%H:%M");
+          now.strftime(db, sizeof(db), "%a %m/%d");
+        }
         it.print(128, 0, id(oled_font_sm), TextAlign::TOP_RIGHT, tb);
+        it.print(128, 12, id(oled_font_sm), TextAlign::TOP_RIGHT, db);
+      }
+      // ADJUST mode trumps the card stack: live countdown + edit indicator.
+      if (id(esp_ui_mode) == 1) {
+        std::string zone = id(esp_active_zone).has_state() ? id(esp_active_zone).state : "—";
+        it.print(0, 0, id(oled_font_sm), "Adjust run");
+        it.printf(0, 14, id(oled_font_sm), "%s", zone.c_str());
+        int t = id(esp_ui_adjust_target);
+        if (t < 0) t = 0;
+        char buf[10];
+        snprintf(buf, sizeof(buf), "%d:%02d", t / 60, t % 60);
+        it.print(0, 28, id(oled_font_lg), buf);
+        it.print(0, 52, id(oled_font_sm), "Turn dial +/-1m");
+        return;
       }
       const int card = ((id(esp_ui_card) % 11) + 11) % 11;
       if (card != 0) {
@@ -108,13 +126,13 @@ display:
         it.print(0, 64, id(oled_font_sm), TextAlign::BOTTOM_LEFT, ind);
       }
       switch (card) {
-        case 0: {
-          it.print(0, 0, id(oled_font_lg), "ESPrinkler");
+        case 0: {  // STATUS — small header keeps room for the stacked clock.
+          it.print(0, 0, id(oled_font_sm), "ESPrinkler");
           std::string st = id(esp_state).has_state() ? id(esp_state).state : "—";
-          it.printf(0, 24, id(oled_font_sm), "State: %s", st.c_str());
+          it.printf(0, 26, id(oled_font_sm), "State: %s", st.c_str());
           if (st == "running" || st == "manual") {
             std::string zone = id(esp_active_zone).has_state() ? id(esp_active_zone).state : "—";
-            it.printf(0, 38, id(oled_font_sm), "Zone: %s", zone.c_str());
+            it.printf(0, 40, id(oled_font_sm), "Zone: %s", zone.c_str());
             if (id(esp_total_remaining).has_state()) {
               int secs = (int) id(esp_total_remaining).state;
               it.printf(0, 52, id(oled_font_sm), "Left: %d:%02d", secs / 60, secs % 60);
@@ -126,48 +144,48 @@ display:
           break;
         }
         case 1:
-          it.print(0, 18, id(oled_font_lg), "Start all");
-          it.print(0, 48, id(oled_font_sm), "Press to run cycle");
+          it.print(0, 26, id(oled_font_lg), "Start all");
+          it.print(0, 52, id(oled_font_sm), "Press to run cycle");
           break;
         case 2:
-          it.print(0, 18, id(oled_font_lg), "Stop");
-          it.print(0, 48, id(oled_font_sm), "Press to shut down");
+          it.print(0, 26, id(oled_font_lg), "Stop");
+          it.print(0, 52, id(oled_font_sm), "Press to shut down");
           break;
         case 3: {
           bool paused = id(esp_state).has_state() && id(esp_state).state == "paused";
-          it.print(0, 18, id(oled_font_lg), paused ? "Resume" : "Pause");
-          it.print(0, 48, id(oled_font_sm), paused ? "Press to resume" : "Press to pause");
+          it.print(0, 26, id(oled_font_lg), paused ? "Resume" : "Pause");
+          it.print(0, 52, id(oled_font_sm), paused ? "Press to resume" : "Press to pause");
           break;
         }
         case 4: {
-          it.print(0, 18, id(oled_font_lg), "+24h rain");
+          it.print(0, 26, id(oled_font_lg), "+24h rain");
           if (id(esp_rain_delay).has_state() && (int) id(esp_rain_delay).state > 0) {
             int h = (int) id(esp_rain_delay).state;
-            it.printf(0, 48, id(oled_font_sm), "Now: %dh remaining", h);
+            it.printf(0, 52, id(oled_font_sm), "Now: %dh remaining", h);
           } else {
-            it.print(0, 48, id(oled_font_sm), "Press to set +24h");
+            it.print(0, 52, id(oled_font_sm), "Press to set +24h");
           }
           break;
         }
         case 5:
-          it.print(0, 18, id(oled_font_lg), "Clear rain");
-          it.print(0, 48, id(oled_font_sm), "Press to clear");
+          it.print(0, 26, id(oled_font_lg), "Clear rain");
+          it.print(0, 52, id(oled_font_sm), "Press to clear");
           break;
         case 6: {
           bool armed = id(esp_schedule_enabled).state;
-          it.print(0, 18, id(oled_font_lg), armed ? "Disarm" : "Arm");
-          it.print(0, 48, id(oled_font_sm), armed ? "Press to disable" : "Press to enable");
+          it.print(0, 26, id(oled_font_lg), armed ? "Disarm" : "Arm");
+          it.print(0, 52, id(oled_font_sm), armed ? "Press to disable" : "Press to enable");
           break;
         }
         default: {
           int zi = card - 7;
           char title[20];
-          snprintf(title, sizeof(title), "Run zone %d", zi + 1);
-          it.print(0, 18, id(oled_font_lg), title);
+          snprintf(title, sizeof(title), "Zone %d", zi + 1);
+          it.print(0, 26, id(oled_font_lg), title);
           const char *vn = id(yard).valve_name(zi);
           if (vn != nullptr && vn[0] != '\0')
-            it.printf(0, 38, id(oled_font_sm), "%s", vn);
-          it.print(0, 48, id(oled_font_sm), "Press to start");
+            it.printf(0, 14, id(oled_font_sm), "%s", vn);
+          it.print(0, 52, id(oled_font_sm), "Press to run");
           break;
         }
       }
@@ -216,12 +234,46 @@ esprinkler:
         days: weekends
 
 # --- Rotary encoder + button (card-stack UX over the OLED) --------------------------
-# State global the OLED reads.
+# UI state. esp_ui_mode: 0 = browsing cards, 1 = ADJUST mode (live countdown +
+# the dial changes run length in 1-min steps). esp_ui_adjust_target is the
+# tentative run duration in seconds while in ADJUST mode.
 globals:
   - id: esp_ui_card
     type: int
     restore_value: false
     initial_value: "0"
+  - id: esp_ui_mode
+    type: int
+    restore_value: false
+    initial_value: "0"
+  - id: esp_ui_adjust_target
+    type: int
+    restore_value: false
+    initial_value: "0"
+
+# Auto-commit any pending ADJUST target and return to the Status card after 3 s
+# of no input. `mode: restart` cancels the pending delay and re-arms it each
+# time an encoder event fires.
+script:
+  - id: esp_ui_idle
+    mode: restart
+    then:
+      - delay: 3s
+      - lambda: |-
+          if (id(esp_ui_mode) == 1) {
+            auto active = id(yard).active_valve();
+            if (active.has_value()) {
+              uint32_t cur = id(yard).time_remaining_active_valve().value_or(0);
+              uint32_t target = (uint32_t) id(esp_ui_adjust_target);
+              if (target >= 30 && (target > cur + 4 || target + 4 < cur)) {
+                size_t v = *active;
+                id(yard).shutdown(false);
+                id(yard).start_single_valve(v, target);
+              }
+            }
+          }
+          id(esp_ui_mode) = 0;
+          id(esp_ui_card) = 0;
 
 sensor:
   - platform: rotary_encoder
@@ -231,34 +283,102 @@ sensor:
     publish_initial_value: false
     on_clockwise:
       then:
-        - lambda: 'id(esp_ui_card) = (id(esp_ui_card) + 1) % 11;'
+        - lambda: |-
+            if (id(esp_ui_mode) == 1) {
+              int t = id(esp_ui_adjust_target) + 60;
+              if (t > 4 * 3600) t = 4 * 3600;
+              id(esp_ui_adjust_target) = t;
+            } else {
+              id(esp_ui_card) = (id(esp_ui_card) + 1) % 11;
+            }
+        - script.execute: esp_ui_idle
     on_anticlockwise:
       then:
-        - lambda: 'id(esp_ui_card) = (id(esp_ui_card) + 10) % 11;'
+        - lambda: |-
+            if (id(esp_ui_mode) == 1) {
+              int t = id(esp_ui_adjust_target) - 60;
+              if (t < 60) t = 60;
+              id(esp_ui_adjust_target) = t;
+            } else {
+              id(esp_ui_card) = (id(esp_ui_card) + 10) % 11;
+            }
+        - script.execute: esp_ui_idle
 
 binary_sensor:
   - platform: gpio
     id: esp_ui_button
     pin: { number: GPIO27, mode: { input: true, pullup: true }, inverted: true }
     internal: true
-    filters:
-      - delayed_on: 30ms
-    on_press:
-      then:
-        - lambda: |-
-            int card = ((id(esp_ui_card) % 11) + 11) % 11;
-            switch (card) {
-              case 0: break;
-              case 1: id(yard).start_full_cycle(); break;
-              case 2: id(yard).shutdown(); break;
-              case 3:
-                if (id(yard).paused_valve().has_value()) id(yard).resume();
-                else if (id(yard).active_valve().has_value()) id(yard).pause();
-                break;
-              case 4: id(esp_rain_delay).make_call().set_value(24.0f).perform(); break;
-              case 5: id(esp_rain_delay).make_call().set_value(0.0f).perform(); break;
-              case 6: id(esp_schedule_enabled).toggle(); break;
-              default:
-                id(yard).start_single_valve(card - 7);
-                break;
-            }
+    on_click:
+      # SHORT press: activate current card / commit ADJUST.
+      - min_length: 50ms
+        max_length: 800ms
+        then:
+          - lambda: |-
+              if (id(esp_ui_mode) == 1) {
+                auto active = id(yard).active_valve();
+                if (active.has_value()) {
+                  uint32_t cur = id(yard).time_remaining_active_valve().value_or(0);
+                  uint32_t target = (uint32_t) id(esp_ui_adjust_target);
+                  if (target >= 30 && (target > cur + 4 || target + 4 < cur)) {
+                    size_t v = *active;
+                    id(yard).shutdown(false);
+                    id(yard).start_single_valve(v, target);
+                  }
+                }
+                id(esp_ui_mode) = 0;
+                id(esp_ui_card) = 0;
+                return;
+              }
+              int card = ((id(esp_ui_card) % 11) + 11) % 11;
+              switch (card) {
+                case 0:
+                  // Manual run in progress -> enter ADJUST mode for it.
+                  if (id(yard).manual_valve().has_value()) {
+                    id(esp_ui_adjust_target) =
+                        (int) id(yard).time_remaining_active_valve().value_or(60);
+                    id(esp_ui_mode) = 1;
+                  }
+                  break;
+                case 1: id(yard).start_full_cycle(); break;
+                case 2: id(yard).shutdown(); break;
+                case 3:
+                  if (id(yard).paused_valve().has_value()) id(yard).resume();
+                  else if (id(yard).active_valve().has_value()) id(yard).pause();
+                  break;
+                case 4: id(esp_rain_delay).make_call().set_value(24.0f).perform(); break;
+                case 5: id(esp_rain_delay).make_call().set_value(0.0f).perform(); break;
+                case 6: id(esp_schedule_enabled).toggle(); break;
+                default: {
+                  int zi = card - 7;
+                  auto active = id(yard).active_valve();
+                  bool already_running =
+                      active.has_value() && *active == (size_t) zi;
+                  if (already_running) {
+                    id(esp_ui_adjust_target) =
+                        (int) id(yard).time_remaining_active_valve().value_or(60);
+                  } else {
+                    id(yard).start_single_valve(zi);
+                    id(esp_ui_adjust_target) = (int) id(yard).valve_run_duration(zi);
+                  }
+                  id(esp_ui_mode) = 1;
+                  break;
+                }
+              }
+          - script.execute: esp_ui_idle
+      # LONG press: from Status, cancel any active run. From ADJUST, exit without commit.
+      - min_length: 801ms
+        max_length: 6000ms
+        then:
+          - lambda: |-
+              if (id(esp_ui_mode) == 1) {
+                id(esp_ui_mode) = 0;
+                id(esp_ui_card) = 0;
+                return;
+              }
+              int card = ((id(esp_ui_card) % 11) + 11) % 11;
+              if (card == 0 &&
+                  (id(yard).active_valve().has_value() || id(yard).paused_valve().has_value())) {
+                id(yard).shutdown();
+              }
+          - script.execute: esp_ui_idle

@@ -1,14 +1,21 @@
 # ESPrinkler - rotary encoder + push button input package
 #
-# Wires an EC11-style rotary encoder with a center momentary button into the
-# OLED's card-stack UI:
+# Wires an EC11-style rotary encoder with a center momentary button into the OLED's
+# card-stack UI:
 #   - rotating cycles forward/backward through cards
-#   - pressing executes the card's action (run cycle, stop, pause, +24h rain, etc.)
+#   - SHORT-press (~50-800 ms) activates the current card's action
+#   - LONG-press (>800 ms) on the Status card cancels any active run
 #
-# REQUIREMENTS: also include packages/display-oled.yaml — that package defines the
-# `esp_ui_card` global this package writes, and renders each card. Without it the
-# button still acts on the brain (so the controller is usable in the dark), but
-# there's no visual feedback.
+# ADJUST MODE: a short-press on a "Run zone N" card starts that zone AND drops the UI
+# into ADJUST mode; a short-press on the Status card while a MANUAL zone is running also
+# enters ADJUST mode. In ADJUST mode the display shows the live countdown and rotating
+# the dial changes the run length by ±1 min. The new total is committed (relay clicks
+# off + back on with the new duration) on either a press or 3 s of no input.
+#
+# REQUIREMENTS: also include packages/display-oled.yaml — that package owns the
+# `esp_ui_card`, `esp_ui_mode`, and `esp_ui_adjust_target` globals this package mutates
+# and renders. Without it the button still acts on the brain (so the controller is
+# usable in the dark), but there's no visual feedback.
 #
 # CONVENTION: your config must also define
 #   - sprinkler controller id matching ${sprinkler_controller} (default: yard)
@@ -16,14 +23,14 @@
 #   - switch   id: esp_schedule_enabled  (esprinkler: schedule_enabled:)
 #
 # CARD NUMBERING (kept in sync with packages/display-oled.yaml):
-#   0  STATUS              (no press action)
+#   0  STATUS              (short: enter ADJUST if manual is running. long: cancel any run)
 #   1  START ALL           -> sprinkler.start_full_cycle
 #   2  STOP                -> sprinkler.shutdown
 #   3  PAUSE / RESUME      -> pause(); resume() if already paused
 #   4  +24H RAIN           -> rain_delay := 24
 #   5  CLEAR RAIN          -> rain_delay := 0
 #   6  ARM / DISARM SCHED  -> schedule_enabled toggle
-#   7+ RUN ZONE i          -> sprinkler.start_single_valve(i)
+#   7+ RUN ZONE i          -> sprinkler.start_single_valve(i) then enter ADJUST
 
 substitutions:
   sprinkler_controller: yard
@@ -31,6 +38,33 @@ substitutions:
   encoder_pin_a: GPIO32
   encoder_pin_b: GPIO33
   encoder_pin_btn: GPIO27
+
+# Auto-commit + return-to-Status after 3 s of no input. `mode: restart` cancels the
+# pending delay and starts over each time an encoder or button event re-triggers it,
+# which is exactly the "reset idle timer" semantics we want.
+script:
+  - id: esp_ui_idle
+    mode: restart
+    then:
+      - delay: 3s
+      - lambda: |-
+          // Commit any pending ADJUST target before returning to Status.
+          if (id(esp_ui_mode) == 1) {
+            auto& s = id(${sprinkler_controller});
+            auto active = s.active_valve();
+            if (active.has_value()) {
+              uint32_t cur = s.time_remaining_active_valve().value_or(0);
+              uint32_t target = (uint32_t) id(esp_ui_adjust_target);
+              // Restart only if the user actually changed the value meaningfully.
+              if (target >= 30 && (target > cur + 4 || target + 4 < cur)) {
+                size_t v = *active;
+                s.shutdown(false);
+                s.start_single_valve(v, target);
+              }
+            }
+          }
+          id(esp_ui_mode) = 0;
+          id(esp_ui_card) = 0;
 
 sensor:
   - platform: rotary_encoder
@@ -45,13 +79,27 @@ sensor:
     on_clockwise:
       then:
         - lambda: |-
-            const int n = 7 + ${zone_count};
-            id(esp_ui_card) = (id(esp_ui_card) + 1) % n;
+            if (id(esp_ui_mode) == 1) {
+              int t = id(esp_ui_adjust_target) + 60;
+              if (t > 4 * 3600) t = 4 * 3600;
+              id(esp_ui_adjust_target) = t;
+            } else {
+              const int n = 7 + ${zone_count};
+              id(esp_ui_card) = (id(esp_ui_card) + 1) % n;
+            }
+        - script.execute: esp_ui_idle
     on_anticlockwise:
       then:
         - lambda: |-
-            const int n = 7 + ${zone_count};
-            id(esp_ui_card) = (id(esp_ui_card) + n - 1) % n;
+            if (id(esp_ui_mode) == 1) {
+              int t = id(esp_ui_adjust_target) - 60;
+              if (t < 60) t = 60;
+              id(esp_ui_adjust_target) = t;
+            } else {
+              const int n = 7 + ${zone_count};
+              id(esp_ui_card) = (id(esp_ui_card) + n - 1) % n;
+            }
+        - script.execute: esp_ui_idle
 
 binary_sensor:
   - platform: gpio
@@ -61,42 +109,91 @@ binary_sensor:
       mode: { input: true, pullup: true }
       inverted: true
     internal: true
-    filters:
-      - delayed_on: 30ms
-    on_press:
-      then:
-        - lambda: |-
-            const int z = ${zone_count};
-            const int n = 7 + z;
-            int card = ((id(esp_ui_card) % n) + n) % n;
-            switch (card) {
-              case 0:
-                break;  // Status — informational only
-              case 1:
-                id(${sprinkler_controller}).start_full_cycle();
-                break;
-              case 2:
-                id(${sprinkler_controller}).shutdown();
-                break;
-              case 3:
-                if (id(${sprinkler_controller}).paused_valve().has_value())
-                  id(${sprinkler_controller}).resume();
-                else if (id(${sprinkler_controller}).active_valve().has_value())
-                  id(${sprinkler_controller}).pause();
-                break;
-              case 4:
-                id(esp_rain_delay).make_call().set_value(24.0f).perform();
-                break;
-              case 5:
-                id(esp_rain_delay).make_call().set_value(0.0f).perform();
-                break;
-              case 6:
-                id(esp_schedule_enabled).toggle();
-                break;
-              default: {
-                int zi = card - 7;
-                if (zi >= 0 && zi < z)
-                  id(${sprinkler_controller}).start_single_valve(zi);
-                break;
+    on_click:
+      # Short press: activate the current card / enter or commit ADJUST.
+      - min_length: 50ms
+        max_length: 800ms
+        then:
+          - lambda: |-
+              auto& s = id(${sprinkler_controller});
+              if (id(esp_ui_mode) == 1) {
+                // Commit and exit ADJUST (same logic as the idle-timeout commit).
+                auto active = s.active_valve();
+                if (active.has_value()) {
+                  uint32_t cur = s.time_remaining_active_valve().value_or(0);
+                  uint32_t target = (uint32_t) id(esp_ui_adjust_target);
+                  if (target >= 30 && (target > cur + 4 || target + 4 < cur)) {
+                    size_t v = *active;
+                    s.shutdown(false);
+                    s.start_single_valve(v, target);
+                  }
+                }
+                id(esp_ui_mode) = 0;
+                id(esp_ui_card) = 0;
+                return;
               }
-            }
+              const int z = ${zone_count};
+              const int n = 7 + z;
+              int card = ((id(esp_ui_card) % n) + n) % n;
+              switch (card) {
+                case 0:
+                  // Enter ADJUST if a MANUAL zone is running (Joe's "short press on
+                  // main page while manual running -> adjust" rule).
+                  if (s.manual_valve().has_value()) {
+                    id(esp_ui_adjust_target) =
+                        (int) s.time_remaining_active_valve().value_or(60);
+                    id(esp_ui_mode) = 1;
+                  }
+                  break;
+                case 1: s.start_full_cycle(); break;
+                case 2: s.shutdown(); break;
+                case 3:
+                  if (s.paused_valve().has_value()) s.resume();
+                  else if (s.active_valve().has_value()) s.pause();
+                  break;
+                case 4: id(esp_rain_delay).make_call().set_value(24.0f).perform(); break;
+                case 5: id(esp_rain_delay).make_call().set_value(0.0f).perform(); break;
+                case 6: id(esp_schedule_enabled).toggle(); break;
+                default: {
+                  int zi = card - 7;
+                  if (zi >= 0 && zi < z) {
+                    auto active = s.active_valve();
+                    bool already_running =
+                        active.has_value() && *active == (size_t) zi;
+                    if (already_running) {
+                      // Don't restart; just adjust the in-flight run.
+                      id(esp_ui_adjust_target) =
+                          (int) s.time_remaining_active_valve().value_or(60);
+                    } else {
+                      s.start_single_valve(zi);
+                      // valve_run_duration() returns the configured run length even
+                      // before the FSM has transitioned to ACTIVE, so use it as the
+                      // initial target (time_remaining_active_valve() can read 0 here).
+                      id(esp_ui_adjust_target) = (int) s.valve_run_duration(zi);
+                    }
+                    id(esp_ui_mode) = 1;
+                  }
+                  break;
+                }
+              }
+          - script.execute: esp_ui_idle
+      # Long press: cancel the active run (any kind) from Status; in ADJUST, leave
+      # without committing.
+      - min_length: 801ms
+        max_length: 6000ms
+        then:
+          - lambda: |-
+              auto& s = id(${sprinkler_controller});
+              if (id(esp_ui_mode) == 1) {
+                id(esp_ui_mode) = 0;
+                id(esp_ui_card) = 0;
+                return;
+              }
+              const int z = ${zone_count};
+              const int n = 7 + z;
+              int card = ((id(esp_ui_card) % n) + n) % n;
+              if (card == 0 &&
+                  (s.active_valve().has_value() || s.paused_valve().has_value())) {
+                s.shutdown();
+              }
+          - script.execute: esp_ui_idle
