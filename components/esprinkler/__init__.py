@@ -123,6 +123,10 @@ ZONE_SCHEMA = cv.Schema(
             unit_of_measurement=UNIT_SECOND,
             accuracy_decimals=0,
             icon="mdi:timer-sand",
+            # delta: 1 stops 0 -> 0 (or N -> N) publishes from spamming the
+            # state log every tick. The C++ side also de-dups, but this is
+            # the canonical ESPHome mechanism + a backstop.
+            filters=[{"delta": 1}],
         ),
     }
 )
@@ -176,6 +180,9 @@ CONFIG_SCHEMA = cv.All(
                 unit_of_measurement=UNIT_SECOND,
                 accuracy_decimals=0,
                 icon="mdi:timer-sand",
+                # delta: 1 = silence state-log spam when remaining holds at 0
+                # (or any unchanged value) between ticks.
+                filters=[{"delta": 1}],
             ),
             cv.Optional(CONF_RAIN_DELAY): number.number_schema(
                 RainDelayNumber,
