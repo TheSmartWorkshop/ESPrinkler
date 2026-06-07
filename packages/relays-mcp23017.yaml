@@ -1,10 +1,11 @@
-# ESPrinkler — MCP23017 I/O-expander relay package
+# ESPrinkler - MCP23017 I/O-expander relay package
 #
-# 16 relay channels over I²C from a single MCP23017 — ideal for high zone counts or
+# 16 relay channels over I2C from a single MCP23017 - ideal for high zone counts or
 # pin-starved boards (e.g. ESP32-C3). Chain a second expander at 0x21 for 32 channels.
-# Zones bind to expander pins exactly like GPIO.
+# The `sprinkler` component opens valves by toggling these switches (valve_switch_id), so
+# they are plain `switch` entities marked `internal: true`.
 #
-# STATUS: scaffolding. Shows the first four channels + a pump channel; extend as needed.
+# Set `relay_inverted: "true"` for active-low relay boards. Override I2C pins via subs.
 
 substitutions:
   relay_inverted: "false"
@@ -20,24 +21,46 @@ mcp23017:
   - id: zone_expander
     address: 0x20
 
-output:
+switch:
   - platform: gpio
     id: relay_1
     pin: { mcp23xxx: zone_expander, number: 0, mode: { output: true } }
     inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
   - platform: gpio
     id: relay_2
     pin: { mcp23xxx: zone_expander, number: 1, mode: { output: true } }
     inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
   - platform: gpio
     id: relay_3
     pin: { mcp23xxx: zone_expander, number: 2, mode: { output: true } }
     inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
   - platform: gpio
     id: relay_4
     pin: { mcp23xxx: zone_expander, number: 3, mode: { output: true } }
     inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: relay_5
+    pin: { mcp23xxx: zone_expander, number: 4, mode: { output: true } }
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: relay_6
+    pin: { mcp23xxx: zone_expander, number: 5, mode: { output: true } }
+    inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
   - platform: gpio
     id: pump_relay
     pin: { mcp23xxx: zone_expander, number: 15, mode: { output: true } }
     inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF

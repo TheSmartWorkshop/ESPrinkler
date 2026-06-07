@@ -1,12 +1,13 @@
-# ESPrinkler — direct-GPIO relay package
+# ESPrinkler - direct-GPIO relay package
 #
-# One output per zone, wired straight to ESP32 GPIO. Good for a handful of zones on boards
-# with enough free pins. For high zone counts or pin-starved boards, use relays-mcp23017.yaml.
+# One GPIO-backed switch per zone, wired straight to the ESP32. ESPHome's `sprinkler`
+# component opens valves by toggling these switches (valve_switch_id), so they are plain
+# `switch` entities marked `internal: true` (the user-facing control is the sprinkler
+# valve_switch, not the raw relay). For high zone counts or pin-starved boards, use
+# relays-mcp23017.yaml instead.
 #
-# Substitutions let you remap pins without editing this file. Many relay boards are
-# ACTIVE-LOW — set `relay_inverted: "true"` if a LOW input energizes the relay.
-#
-# STATUS: scaffolding. Pin defaults are placeholders; override per board.
+# Many relay boards are ACTIVE-LOW - set `relay_inverted: "true"` if a LOW input energizes
+# the relay. Override pins via substitutions without editing this file.
 
 substitutions:
   relay_inverted: "false"
@@ -16,24 +17,34 @@ substitutions:
   zone_4_pin: GPIO19
   pump_pin: GPIO21
 
-output:
+switch:
   - platform: gpio
     id: relay_1
     pin: ${zone_1_pin}
     inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
   - platform: gpio
     id: relay_2
     pin: ${zone_2_pin}
     inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
   - platform: gpio
     id: relay_3
     pin: ${zone_3_pin}
     inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
   - platform: gpio
     id: relay_4
     pin: ${zone_4_pin}
     inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
   - platform: gpio
     id: pump_relay
     pin: ${pump_pin}
     inverted: ${relay_inverted}
+    internal: true
+    restore_mode: ALWAYS_OFF
