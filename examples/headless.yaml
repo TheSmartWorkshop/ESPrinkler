@@ -1,0 +1,56 @@
+# ESPrinkler example — headless 4-zone controller (no display)
+#
+# The simplest tier: relays + HA + on-device scheduler, no screen. Runs on any ESP32.
+# Copy this, fill in your secrets, and adapt zones/pins.
+#
+# STATUS: scaffolding — references components/packages that are still stubs.
+
+esphome:
+  name: esprinkler
+  friendly_name: ESPrinkler
+
+esp32:
+  board: esp32dev   # override for your board (see docs/hardware.md)
+  framework:
+    type: arduino
+
+logger:
+api:
+  encryption:
+    key: !secret api_encryption_key
+ota:
+  - platform: esphome
+    password: !secret ota_password
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+packages:
+  esprinkler_core: !include ../packages/core.yaml
+  esprinkler_relays: !include ../packages/relays-gpio.yaml
+
+esprinkler:
+  zones:
+    - name: "Front Lawn"
+      output: relay_1
+      flow_type: sprinkler
+      default_duration: 15min
+    - name: "Back Lawn"
+      output: relay_2
+      flow_type: sprinkler
+      default_duration: 15min
+    - name: "Flower Beds"
+      output: relay_3
+      flow_type: drip
+      default_duration: 25min
+    - name: "Veg Garden"
+      output: relay_4
+      flow_type: drip
+      default_duration: 30min
+  master_output: pump_relay
+  pump_start_delay: 3s
+  pump_stop_delay: 2s
+  scheduler:
+    programs:
+      - start_time: "06:00:00"
+        days: [mon, wed, fri]

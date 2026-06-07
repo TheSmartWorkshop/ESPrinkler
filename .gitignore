@@ -1,0 +1,21 @@
+# ESPHome build artifacts
+.esphome/
+*.bin
+secrets.yaml
+
+# Node / Lovelace card build (card/)
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,23 @@
+# ESPrinkler — core package
+#
+# Pulls in the esprinkler external component and the ESPHome plumbing every build needs
+# (time source for the scheduler). Mix this into your device YAML, then add a relay
+# package and (optionally) a display package.
+#
+# STATUS: scaffolding. Wiring is illustrative and will firm up as the component lands.
+
+external_components:
+  - source: github://TheSmartWorkshop/ESPrinkler@main
+    components: [esprinkler]
+
+# The on-device scheduler needs a real clock. Home Assistant provides one for free; SNTP is
+# the standalone fallback so watering survives an HA outage.
+time:
+  - platform: homeassistant
+    id: esprinkler_time
+  - platform: sntp
+    id: esprinkler_time_fallback
+
+# Zones/master/scheduler are declared per-device — see examples/ for full configs.
+# esprinkler:
+#   zones: [...]

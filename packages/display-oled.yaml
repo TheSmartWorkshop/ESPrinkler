@@ -1,0 +1,34 @@
+# ESPrinkler — OLED display package (monochrome)
+#
+# A ready-made status/menu UI for an I²C SSD1306/SH1106 128x64 OLED. Runs on any ESP32,
+# including the C3. Reads the entity contract state (controller state, active zone, time
+# remaining) — it renders state, it doesn't compute it.
+#
+# STATUS: scaffolding. The lambda is a placeholder layout; the real page set (idle / now-
+# watering / zone list) lands with the component's state model.
+
+substitutions:
+  oled_sda: GPIO8
+  oled_scl: GPIO9
+  oled_address: "0x3C"
+
+i2c:
+  sda: ${oled_sda}
+  scl: ${oled_scl}
+
+font:
+  - file: "gfonts://Roboto"
+    id: oled_font_sm
+    size: 12
+  - file: "gfonts://Roboto"
+    id: oled_font_lg
+    size: 20
+
+display:
+  - platform: ssd1306_i2c
+    model: "SSD1306 128x64"
+    address: ${oled_address}
+    lambda: |-
+      // TODO(scaffolding): bind to esp_state / esp_active_zone / esp_active_remaining.
+      it.printf(0, 0, id(oled_font_lg), "ESPrinkler");
+      it.printf(0, 28, id(oled_font_sm), "status: scaffolding");

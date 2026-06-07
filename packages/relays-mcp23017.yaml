@@ -1,0 +1,43 @@
+# ESPrinkler — MCP23017 I/O-expander relay package
+#
+# 16 relay channels over I²C from a single MCP23017 — ideal for high zone counts or
+# pin-starved boards (e.g. ESP32-C3). Chain a second expander at 0x21 for 32 channels.
+# Zones bind to expander pins exactly like GPIO.
+#
+# STATUS: scaffolding. Shows the first four channels + a pump channel; extend as needed.
+
+substitutions:
+  relay_inverted: "false"
+  i2c_sda: GPIO8
+  i2c_scl: GPIO9
+
+i2c:
+  sda: ${i2c_sda}
+  scl: ${i2c_scl}
+  scan: true
+
+mcp23017:
+  - id: zone_expander
+    address: 0x20
+
+output:
+  - platform: gpio
+    id: relay_1
+    pin: { mcp23xxx: zone_expander, number: 0, mode: { output: true } }
+    inverted: ${relay_inverted}
+  - platform: gpio
+    id: relay_2
+    pin: { mcp23xxx: zone_expander, number: 1, mode: { output: true } }
+    inverted: ${relay_inverted}
+  - platform: gpio
+    id: relay_3
+    pin: { mcp23xxx: zone_expander, number: 2, mode: { output: true } }
+    inverted: ${relay_inverted}
+  - platform: gpio
+    id: relay_4
+    pin: { mcp23xxx: zone_expander, number: 3, mode: { output: true } }
+    inverted: ${relay_inverted}
+  - platform: gpio
+    id: pump_relay
+    pin: { mcp23xxx: zone_expander, number: 15, mode: { output: true } }
+    inverted: ${relay_inverted}

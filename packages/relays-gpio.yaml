@@ -1,0 +1,39 @@
+# ESPrinkler — direct-GPIO relay package
+#
+# One output per zone, wired straight to ESP32 GPIO. Good for a handful of zones on boards
+# with enough free pins. For high zone counts or pin-starved boards, use relays-mcp23017.yaml.
+#
+# Substitutions let you remap pins without editing this file. Many relay boards are
+# ACTIVE-LOW — set `relay_inverted: "true"` if a LOW input energizes the relay.
+#
+# STATUS: scaffolding. Pin defaults are placeholders; override per board.
+
+substitutions:
+  relay_inverted: "false"
+  zone_1_pin: GPIO16
+  zone_2_pin: GPIO17
+  zone_3_pin: GPIO18
+  zone_4_pin: GPIO19
+  pump_pin: GPIO21
+
+output:
+  - platform: gpio
+    id: relay_1
+    pin: ${zone_1_pin}
+    inverted: ${relay_inverted}
+  - platform: gpio
+    id: relay_2
+    pin: ${zone_2_pin}
+    inverted: ${relay_inverted}
+  - platform: gpio
+    id: relay_3
+    pin: ${zone_3_pin}
+    inverted: ${relay_inverted}
+  - platform: gpio
+    id: relay_4
+    pin: ${zone_4_pin}
+    inverted: ${relay_inverted}
+  - platform: gpio
+    id: pump_relay
+    pin: ${pump_pin}
+    inverted: ${relay_inverted}

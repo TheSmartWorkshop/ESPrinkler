@@ -1,0 +1,44 @@
+# ESPrinkler — LVGL color touchscreen package
+#
+# A ready-made full-color touch UI (zone tiles, run/stop, schedule editing) built on
+# ESPHome's LVGL integration. This is the most demanding tier: it wants an ESP32-S3 with
+# PSRAM and ample flash. Bind it to a color TFT (ILI9341/ST7789/GC9A01) + a touch
+# controller (XPT2046/FT6x36).
+#
+# STATUS: scaffolding. Display/touch hardware blocks and the LVGL page tree are placeholders;
+# the full UI lands once the entity contract's state model is implemented.
+
+# --- Bus + panel (example: SPI ILI9341). Override pins per board. -----------------
+substitutions:
+  tft_cs: GPIO10
+  tft_dc: GPIO11
+  tft_reset: GPIO12
+  touch_cs: GPIO13
+
+# spi:
+#   clk_pin: GPIO14
+#   mosi_pin: GPIO15
+#   miso_pin: GPIO16
+#
+# display:
+#   - platform: ili9xxx
+#     model: ILI9341
+#     cs_pin: ${tft_cs}
+#     dc_pin: ${tft_dc}
+#     reset_pin: ${tft_reset}
+#     auto_clear_enabled: false   # LVGL owns the framebuffer
+#
+# touchscreen:
+#   - platform: xpt2046
+#     cs_pin: ${touch_cs}
+
+# --- LVGL UI (placeholder) --------------------------------------------------------
+# lvgl:
+#   pages:
+#     - id: page_home
+#       widgets:
+#         # TODO(scaffolding): zone tiles bound to esp_zone_{i}_* + a now-watering banner
+#         # bound to esp_active_zone / esp_active_remaining; schedule editor bound to the
+#         # esp_prog_{p}_* entities.
+#         - label:
+#             text: "ESPrinkler (scaffolding)"
