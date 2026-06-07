@@ -97,12 +97,13 @@ display:
     model: ${oled_model}
     address: ${oled_address}
     id: esprinkler_oled
-    # 1 s is enough for the per-second countdown and per-minute clock; encoder
-    # events trigger an immediate component.update so navigation still feels
-    # snappy. Faster intervals (200 ms) burned a noticeable share of every loop
-    # rendering Roboto TTF + pushing the framebuffer over I2C, and that started
-    # to look like missed encoder rotations.
-    update_interval: 1s
+    # 200 ms gives a snappy live countdown and catches an encoder rotation
+    # within a render tick. We deliberately do NOT call component.update from
+    # the encoder handlers: each render takes ~50 ms of TTF + I2C work, so
+    # calling it per rotation event caused the encoder's drain loop to take
+    # seconds during a fast spin (and the runtime to log "took a long time
+    # for an operation" warnings).
+    update_interval: 200ms
     lambda: |-
       // Stacked clock at top-right ("HH:MM" / day-of-week). Two short right-aligned
       // lines keep enough headroom that the larger "ESPrinkler" header still fits.

@@ -105,11 +105,17 @@ class ESPrinkler : public PollingComponent {
   std::vector<ZoneSensors> zones_;
   std::vector<SchedulerProgram> programs_;
 
-  // Cache last-published text so we don't republish unchanged strings every tick.
+  // De-dup state for every published entity: don't republish unchanged values
+  // every tick (avoids "Total Time Remaining >> 0 s" log spam + needless HA
+  // bus traffic + needless work in the main loop).
   std::string last_state_;
   std::string last_active_zone_;
   std::string last_next_run_;
   float last_rain_delay_published_{-1.0f};
+  int32_t last_total_remaining_{-1};
+  // Per-zone last-published values, sized when zones_ is grown.
+  std::vector<int8_t> last_zone_active_;     // 0/1, -1 = never
+  std::vector<int32_t> last_zone_remaining_; // seconds, -1 = never
 
   // Scheduler debounce: remember the wall-clock minute we last fired in so the per-second
   // poll doesn't retrigger the same program 60 times.

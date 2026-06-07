@@ -113,21 +113,38 @@ void ESPrinkler::publish_state_() {
       active_remaining = *tr;
   }
 
-  // Total remaining = current valve + everything still queued.
+  // Total remaining = current valve + everything still queued. De-dup: only
+  // publish when the integer-second value changes (it's a per-tick number so
+  // without de-dup we'd emit a state every second forever).
   if (this->total_remaining_sensor_ != nullptr) {
     uint32_t total = active_remaining;
     if (active.has_value())
       total += this->sprinkler_->total_queue_time();
-    this->total_remaining_sensor_->publish_state(total);
+    if ((int32_t) total != this->last_total_remaining_) {
+      this->total_remaining_sensor_->publish_state(total);
+      this->last_total_remaining_ = (int32_t) total;
+    }
   }
 
-  // Per-zone active + remaining.
+  // Per-zone active + remaining, with the same de-dup. Grow the last_* vectors
+  // lazily so they always match zones_.
+  if (this->last_zone_active_.size() != this->zones_.size())
+    this->last_zone_active_.resize(this->zones_.size(), -1);
+  if (this->last_zone_remaining_.size() != this->zones_.size())
+    this->last_zone_remaining_.resize(this->zones_.size(), -1);
   for (size_t i = 0; i < this->zones_.size(); i++) {
     const bool is_active = active.has_value() && *active == i;
-    if (this->zones_[i].active != nullptr)
+    const int32_t rem = is_active ? (int32_t) active_remaining : 0;
+    if (this->zones_[i].active != nullptr &&
+        (int8_t) is_active != this->last_zone_active_[i]) {
       this->zones_[i].active->publish_state(is_active);
-    if (this->zones_[i].remaining != nullptr)
-      this->zones_[i].remaining->publish_state(is_active ? active_remaining : 0);
+      this->last_zone_active_[i] = (int8_t) is_active;
+    }
+    if (this->zones_[i].remaining != nullptr &&
+        rem != this->last_zone_remaining_[i]) {
+      this->zones_[i].remaining->publish_state(rem);
+      this->last_zone_remaining_[i] = rem;
+    }
   }
 
   // Next scheduled run (human string).
