@@ -1,16 +1,20 @@
-# ESPrinkler — OLED display package (monochrome)
+# ESPrinkler - OLED display package (monochrome)
 #
-# A ready-made status/menu UI for an I²C SSD1306/SH1106 128x64 OLED. Runs on any ESP32,
-# including the C3. Reads the entity contract state (controller state, active zone, time
-# remaining) — it renders state, it doesn't compute it.
+# A ready-made status UI for an I2C SSD1306/SH1106 128x64 OLED. Runs on any ESP32.
+# It RENDERS the entity-contract state; it does not compute it.
 #
-# STATUS: scaffolding. The lambda is a placeholder layout; the real page set (idle / now-
-# watering / zone list) lands with the component's state model.
+# CONVENTION: this package binds to entities by id. Your config must define these ids:
+#   - text_sensor id: esp_state          (esprinkler: state:)
+#   - text_sensor id: esp_active_zone     (esprinkler: active_zone:)
+#   - text_sensor id: esp_next_run        (esprinkler: next_run:)
+#   - sensor      id: esp_total_remaining (esprinkler: total_remaining:)
+# See examples/oled.yaml for a complete device using this package.
 
 substitutions:
   oled_sda: GPIO8
   oled_scl: GPIO9
   oled_address: "0x3C"
+  oled_model: "SSD1306 128x64"
 
 i2c:
   sda: ${oled_sda}
@@ -20,15 +24,27 @@ font:
   - file: "gfonts://Roboto"
     id: oled_font_sm
     size: 12
-  - file: "gfonts://Roboto"
+  - file: "gfonts://Roboto@500"
     id: oled_font_lg
     size: 20
 
 display:
   - platform: ssd1306_i2c
-    model: "SSD1306 128x64"
+    model: ${oled_model}
     address: ${oled_address}
+    id: esprinkler_oled
     lambda: |-
-      // TODO(scaffolding): bind to esp_state / esp_active_zone / esp_active_remaining.
-      it.printf(0, 0, id(oled_font_lg), "ESPrinkler");
-      it.printf(0, 28, id(oled_font_sm), "status: scaffolding");
+      it.print(0, 0, id(oled_font_lg), "ESPrinkler");
+      std::string st = id(esp_state).has_state() ? id(esp_state).state : "—";
+      it.printf(0, 24, id(oled_font_sm), "State: %s", st.c_str());
+      if (st == "running" || st == "manual") {
+        std::string zone = id(esp_active_zone).has_state() ? id(esp_active_zone).state : "—";
+        it.printf(0, 38, id(oled_font_sm), "Zone: %s", zone.c_str());
+        if (id(esp_total_remaining).has_state()) {
+          int secs = (int) id(esp_total_remaining).state;
+          it.printf(0, 52, id(oled_font_sm), "Left: %d:%02d", secs / 60, secs % 60);
+        }
+      } else {
+        std::string next = id(esp_next_run).has_state() ? id(esp_next_run).state : "—";
+        it.printf(0, 52, id(oled_font_sm), "Next: %s", next.c_str());
+      }

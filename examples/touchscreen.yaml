@@ -1,8 +1,10 @@
-# ESPrinkler example — color touchscreen controller (LVGL)
+# ESPrinkler example - color touchscreen controller (LVGL)
 #
-# The full-UI tier. Wants an ESP32-S3 with PSRAM (see docs/hardware.md). Drives a color TFT
-# + touch and a relay bank.
-# STATUS: scaffolding — the LVGL UI in packages/display-lvgl.yaml is still a placeholder.
+# The full-UI tier. Wants an ESP32-S3 with PSRAM (see docs/hardware.md). Drives an SPI
+# color TFT (ILI9341) + an XPT2046 resistive touch panel, plus a relay bank.
+#
+# The LVGL home page binds to the same esp_* state ids the OLED/card use; lambda-bound
+# labels auto-update, and the buttons call sprinkler actions.
 
 esphome:
   name: esprinkler-touch
@@ -11,7 +13,7 @@ esphome:
 esp32:
   board: esp32-s3-devkitc-1
   framework:
-    type: esp-idf   # LVGL/PSRAM builds generally prefer esp-idf
+    type: esp-idf
   flash_size: 8MB
 
 psram:
@@ -29,19 +31,153 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
 
-packages:
-  esprinkler_core: !include ../packages/core.yaml
-  esprinkler_relays: !include ../packages/relays-mcp23017.yaml
-  esprinkler_display: !include ../packages/display-lvgl.yaml
+time:
+  - platform: homeassistant
+    id: ha_time
+  - platform: sntp
+    id: sntp_time
 
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [esprinkler]
+
+# --- Display + touch (SPI) -------------------------------------------------------
+spi:
+  clk_pin: GPIO12
+  mosi_pin: GPIO11
+  miso_pin: GPIO13
+
+display:
+  - platform: ili9xxx
+    model: ILI9341
+    id: tft
+    invert_colors: false
+    cs_pin: GPIO10
+    dc_pin: GPIO9
+    reset_pin: GPIO14
+    auto_clear_enabled: false
+    update_interval: never
+
+touchscreen:
+  - platform: xpt2046
+    id: touch
+    cs_pin: GPIO15
+    interrupt_pin: GPIO16
+    update_interval: 50ms
+    calibration:
+      x_min: 280
+      x_max: 3860
+      y_min: 340
+      y_max: 3860
+
+# --- Relays ----------------------------------------------------------------------
+switch:
+  - { platform: gpio, id: relay_1, pin: GPIO1, internal: true, restore_mode: ALWAYS_OFF }
+  - { platform: gpio, id: relay_2, pin: GPIO2, internal: true, restore_mode: ALWAYS_OFF }
+  - { platform: gpio, id: relay_3, pin: GPIO6, internal: true, restore_mode: ALWAYS_OFF }
+  - { platform: gpio, id: relay_4, pin: GPIO4, internal: true, restore_mode: ALWAYS_OFF }
+  - { platform: gpio, id: pump_relay, pin: GPIO5, internal: true, restore_mode: ALWAYS_OFF }
+
+# --- Engine ----------------------------------------------------------------------
+sprinkler:
+  - id: yard
+    main_switch: "Sprinklers"
+    auto_advance_switch: "Auto Advance"
+    reverse_switch: "Reverse"
+    multiplier_number:
+      name: "Seasonal Adjust"
+    repeat_number:
+      name: "Repeat"
+    pump_start_pump_delay: 3s
+    valves:
+      - { valve_switch: "Front Lawn", enable_switch: "Front Lawn Enabled", valve_switch_id: relay_1, pump_switch_id: pump_relay, run_duration_number: { name: "Front Lawn Duration", initial_value: 15, unit_of_measurement: min } }
+      - { valve_switch: "Back Lawn", enable_switch: "Back Lawn Enabled", valve_switch_id: relay_2, pump_switch_id: pump_relay, run_duration_number: { name: "Back Lawn Duration", initial_value: 15, unit_of_measurement: min } }
+      - { valve_switch: "Flower Beds", enable_switch: "Flower Beds Enabled", valve_switch_id: relay_3, pump_switch_id: pump_relay, run_duration_number: { name: "Flower Beds Duration", initial_value: 25, unit_of_measurement: min } }
+      - { valve_switch: "Veg Garden", enable_switch: "Veg Garden Enabled", valve_switch_id: relay_4, pump_switch_id: pump_relay, run_duration_number: { name: "Veg Garden Duration", initial_value: 30, unit_of_measurement: min } }
+
+# --- Brain -----------------------------------------------------------------------
 esprinkler:
+  sprinkler_id: yard
+  time_id: sntp_time
+  state: { name: "State", id: esp_state }
+  active_zone: { name: "Active Zone", id: esp_active_zone }
+  next_run: { name: "Next Run", id: esp_next_run }
+  total_remaining: { name: "Total Time Remaining", id: esp_total_remaining }
   zones:
-    - { name: "Front Lawn", output: relay_1, flow_type: sprinkler }
-    - { name: "Back Lawn", output: relay_2, flow_type: sprinkler }
-    - { name: "Flower Beds", output: relay_3, flow_type: drip }
-    - { name: "Veg Garden", output: relay_4, flow_type: drip }
-  master_output: pump_relay
+    - { name: "Front Lawn", flow_type: sprinkler, active: { name: "Front Lawn Active" }, remaining: { name: "Front Lawn Remaining" } }
+    - { name: "Back Lawn", flow_type: sprinkler, active: { name: "Back Lawn Active" }, remaining: { name: "Back Lawn Remaining" } }
+    - { name: "Flower Beds", flow_type: drip, active: { name: "Flower Beds Active" }, remaining: { name: "Flower Beds Remaining" } }
+    - { name: "Veg Garden", flow_type: drip, active: { name: "Veg Garden Active" }, remaining: { name: "Veg Garden Remaining" } }
   scheduler:
     programs:
-      - start_time: "06:00:00"
+      - start_time: "06:00"
         days: [mon, wed, fri, sun]
+
+# --- LVGL touchscreen UI ---------------------------------------------------------
+lvgl:
+  rotation: 90
+  displays:
+    - tft
+  touchscreens:
+    - touch
+  pages:
+    - id: home_page
+      widgets:
+        - label:
+            id: lbl_title
+            text: "ESPrinkler"
+            align: TOP_MID
+            y: 4
+        - label:
+            id: lbl_state
+            align: TOP_LEFT
+            x: 8
+            y: 40
+            text: !lambda |-
+              return "State: " + (id(esp_state).has_state() ? id(esp_state).state : std::string("—"));
+        - label:
+            id: lbl_zone
+            align: TOP_LEFT
+            x: 8
+            y: 70
+            text: !lambda |-
+              return "Zone: " + (id(esp_active_zone).has_state() ? id(esp_active_zone).state : std::string("—"));
+        - label:
+            id: lbl_remaining
+            align: TOP_LEFT
+            x: 8
+            y: 100
+            text: !lambda |-
+              if (!id(esp_total_remaining).has_state()) return std::string("Left: —");
+              int s = (int) id(esp_total_remaining).state;
+              char buf[24];
+              snprintf(buf, sizeof(buf), "Left: %d:%02d", s / 60, s % 60);
+              return std::string(buf);
+        - button:
+            id: btn_start
+            align: BOTTOM_LEFT
+            x: 8
+            y: -8
+            width: 140
+            height: 50
+            widgets:
+              - label:
+                  text: "START ALL"
+                  align: CENTER
+            on_click:
+              - sprinkler.start_full_cycle: yard
+        - button:
+            id: btn_stop
+            align: BOTTOM_RIGHT
+            x: -8
+            y: -8
+            width: 140
+            height: 50
+            widgets:
+              - label:
+                  text: "STOP"
+                  align: CENTER
+            on_click:
+              - sprinkler.shutdown: yard

@@ -1,44 +1,120 @@
-# ESPrinkler — LVGL color touchscreen package
+# ESPrinkler - LVGL color touchscreen package
 #
-# A ready-made full-color touch UI (zone tiles, run/stop, schedule editing) built on
-# ESPHome's LVGL integration. This is the most demanding tier: it wants an ESP32-S3 with
-# PSRAM and ample flash. Bind it to a color TFT (ILI9341/ST7789/GC9A01) + a touch
-# controller (XPT2046/FT6x36).
+# A ready-made full-color touch UI built on ESPHome's LVGL integration. This is the most
+# demanding tier: it wants an ESP32-S3 with PSRAM and ample flash (see docs/hardware.md).
 #
-# STATUS: scaffolding. Display/touch hardware blocks and the LVGL page tree are placeholders;
-# the full UI lands once the entity contract's state model is implemented.
+# Defaults target an SPI ILI9341 TFT + XPT2046 resistive touch; override pins via subs.
+# Binds to the same esp_* state ids the OLED/card use (lambda-bound labels auto-update);
+# buttons call sprinkler actions on the controller id given by `sprinkler_controller`.
+#
+# CONVENTION - your config must define:
+#   - sprinkler controller id matching ${sprinkler_controller} (default: yard)
+#   - text_sensor id: esp_state, esp_active_zone
+#   - sensor      id: esp_total_remaining
+# See examples/touchscreen.yaml for a complete, validated device using this UI.
 
-# --- Bus + panel (example: SPI ILI9341). Override pins per board. -----------------
 substitutions:
+  sprinkler_controller: "yard"
+  spi_clk: GPIO12
+  spi_mosi: GPIO11
+  spi_miso: GPIO13
   tft_cs: GPIO10
-  tft_dc: GPIO11
-  tft_reset: GPIO12
-  touch_cs: GPIO13
+  tft_dc: GPIO9
+  tft_reset: GPIO14
+  touch_cs: GPIO15
+  touch_irq: GPIO16
+  lvgl_rotation: "90"
 
-# spi:
-#   clk_pin: GPIO14
-#   mosi_pin: GPIO15
-#   miso_pin: GPIO16
-#
-# display:
-#   - platform: ili9xxx
-#     model: ILI9341
-#     cs_pin: ${tft_cs}
-#     dc_pin: ${tft_dc}
-#     reset_pin: ${tft_reset}
-#     auto_clear_enabled: false   # LVGL owns the framebuffer
-#
-# touchscreen:
-#   - platform: xpt2046
-#     cs_pin: ${touch_cs}
+spi:
+  clk_pin: ${spi_clk}
+  mosi_pin: ${spi_mosi}
+  miso_pin: ${spi_miso}
 
-# --- LVGL UI (placeholder) --------------------------------------------------------
-# lvgl:
-#   pages:
-#     - id: page_home
-#       widgets:
-#         # TODO(scaffolding): zone tiles bound to esp_zone_{i}_* + a now-watering banner
-#         # bound to esp_active_zone / esp_active_remaining; schedule editor bound to the
-#         # esp_prog_{p}_* entities.
-#         - label:
-#             text: "ESPrinkler (scaffolding)"
+display:
+  - platform: ili9xxx
+    model: ILI9341
+    id: tft
+    invert_colors: false
+    cs_pin: ${tft_cs}
+    dc_pin: ${tft_dc}
+    reset_pin: ${tft_reset}
+    auto_clear_enabled: false
+    update_interval: never
+
+touchscreen:
+  - platform: xpt2046
+    id: touch
+    cs_pin: ${touch_cs}
+    interrupt_pin: ${touch_irq}
+    update_interval: 50ms
+    calibration:
+      x_min: 280
+      x_max: 3860
+      y_min: 340
+      y_max: 3860
+
+lvgl:
+  rotation: ${lvgl_rotation}
+  displays:
+    - tft
+  touchscreens:
+    - touch
+  pages:
+    - id: home_page
+      widgets:
+        - label:
+            id: lbl_title
+            text: "ESPrinkler"
+            align: TOP_MID
+            y: 4
+        - label:
+            id: lbl_state
+            align: TOP_LEFT
+            x: 8
+            y: 40
+            text: !lambda |-
+              return "State: " + (id(esp_state).has_state() ? id(esp_state).state : std::string("—"));
+        - label:
+            id: lbl_zone
+            align: TOP_LEFT
+            x: 8
+            y: 70
+            text: !lambda |-
+              return "Zone: " + (id(esp_active_zone).has_state() ? id(esp_active_zone).state : std::string("—"));
+        - label:
+            id: lbl_remaining
+            align: TOP_LEFT
+            x: 8
+            y: 100
+            text: !lambda |-
+              if (!id(esp_total_remaining).has_state()) return std::string("Left: —");
+              int s = (int) id(esp_total_remaining).state;
+              char buf[24];
+              snprintf(buf, sizeof(buf), "Left: %d:%02d", s / 60, s % 60);
+              return std::string(buf);
+        - button:
+            id: btn_start
+            align: BOTTOM_LEFT
+            x: 8
+            y: -8
+            width: 140
+            height: 50
+            widgets:
+              - label:
+                  text: "START ALL"
+                  align: CENTER
+            on_click:
+              - sprinkler.start_full_cycle: ${sprinkler_controller}
+        - button:
+            id: btn_stop
+            align: BOTTOM_RIGHT
+            x: -8
+            y: -8
+            width: 140
+            height: 50
+            widgets:
+              - label:
+                  text: "STOP"
+                  align: CENTER
+            on_click:
+              - sprinkler.shutdown: ${sprinkler_controller}
