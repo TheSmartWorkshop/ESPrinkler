@@ -98,11 +98,11 @@ display:
     model: "SSD1306 128x64"
     address: 0x3C
     id: esprinkler_oled
-    # 200 ms = snappy countdown + encoder catches up within one tick. We
-    # deliberately do NOT component.update from encoder handlers: each render
-    # is ~50 ms of TTF + I2C and per-event updates blocked the encoder's
-    # drain loop ("took a long time for an operation" warnings).
-    update_interval: 200ms
+    # 250 ms keeps the per-second countdown smooth (display ticks 4x faster
+    # than the brain publishes). Encoder handlers do NOT call
+    # component.update -- that's what caused the "took a long time" lag last
+    # round.
+    update_interval: 250ms
     lambda: |-
       // Stacked clock at top-right; 12 vs 24-hour is the clock_format substitution.
       // ESP-IDF newlib's strftime has no %-I (no-pad hour), so 12-hour is built
@@ -159,7 +159,7 @@ display:
         char buf[10];
         snprintf(buf, sizeof(buf), "%d:%02d", t / 60, t % 60);
         it.print(0, 28, id(oled_font_lg), buf);
-        it.print(0, 52, id(oled_font_sm), "Turn dial +/-1m");
+        it.print(0, 48, id(oled_font_sm), "Turn dial +/-1m");
         return;
       }
       const int z = 4;
@@ -171,7 +171,7 @@ display:
         it.printf(0, 26, id(oled_font_sm), "State: %s", st.c_str());
         if (st == "running" || st == "manual") {
           std::string zone = active_zone_label();
-          it.printf(0, 40, id(oled_font_sm), "Zone: %s", zone.c_str());
+          it.printf(0, 36, id(oled_font_sm), "Zone: %s", zone.c_str());
           int displayed;
           if (id(esp_pending_stop_in_secs) > 0) {
             displayed = id(esp_pending_stop_in_secs);
@@ -181,39 +181,39 @@ display:
             displayed = -1;
           }
           if (displayed >= 0)
-            it.printf(0, 52, id(oled_font_sm), "Remaining: %d:%02d", displayed / 60, displayed % 60);
+            it.printf(0, 48, id(oled_font_sm), "Remaining: %d:%02d", displayed / 60, displayed % 60);
         } else {
           std::string next = id(esp_next_run).has_state() ? id(esp_next_run).state : "—";
-          it.printf(0, 52, id(oled_font_sm), "Next: %s", next.c_str());
+          it.printf(0, 48, id(oled_font_sm), "Next: %s", next.c_str());
         }
       } else if (card >= 1 && card <= z) {  // ZONE i
         int zi = card - 1;
         std::string label = zone_label(zi);
         it.printf(0, 14, id(oled_font_sm), "Zone %d", zi + 1);
         it.print(0, 26, id(oled_font_lg), label.c_str());
-        it.print(0, 52, id(oled_font_sm), "Press to run");
+        it.print(0, 48, id(oled_font_sm), "Press to run");
       } else if (card == z + 1) {
         it.print(0, 26, id(oled_font_lg), "Start all");
-        it.print(0, 52, id(oled_font_sm), "Press to run cycle");
+        it.print(0, 48, id(oled_font_sm), "Press to run cycle");
       } else if (card == z + 2) {
         it.print(0, 26, id(oled_font_lg), "Stop");
-        it.print(0, 52, id(oled_font_sm), "Press to shut down");
+        it.print(0, 48, id(oled_font_sm), "Press to shut down");
       } else if (card == z + 3) {
         bool paused = id(esp_state).has_state() && id(esp_state).state == "paused";
         it.print(0, 26, id(oled_font_lg), paused ? "Resume" : "Pause");
-        it.print(0, 52, id(oled_font_sm), paused ? "Press to resume" : "Press to pause");
+        it.print(0, 48, id(oled_font_sm), paused ? "Press to resume" : "Press to pause");
       } else if (card == z + 4) {  // RAIN DELAY toggle
         it.print(0, 26, id(oled_font_lg), "Rain delay");
         if (id(esp_rain_delay).has_state() && (int) id(esp_rain_delay).state > 0) {
           int h = (int) id(esp_rain_delay).state;
-          it.printf(0, 52, id(oled_font_sm), "%dh left  press: clear", h);
+          it.printf(0, 48, id(oled_font_sm), "%dh left  press: clear", h);
         } else {
-          it.print(0, 52, id(oled_font_sm), "Off  press: +24h");
+          it.print(0, 48, id(oled_font_sm), "Off  press: +24h");
         }
       } else if (card == z + 5) {  // AUTO ON/OFF
         bool on = id(esp_schedule_enabled).state;
         it.printf(0, 26, id(oled_font_lg), "Auto: %s", on ? "On" : "Off");
-        it.print(0, 52, id(oled_font_sm), "Press to toggle");
+        it.print(0, 48, id(oled_font_sm), "Press to toggle");
       } else {  // INFO (card == z + 6)
         it.print(0, 0, id(oled_font_sm), "Info");
         char up[20] = "Up: --";
@@ -229,7 +229,7 @@ display:
         it.print(0, 26, id(oled_font_sm), up);
         std::string ip = id(esp_ip).has_state() ? id(esp_ip).state : "--";
         it.printf(0, 38, id(oled_font_sm), "IP: %s", ip.c_str());
-        it.print(0, 50, id(oled_font_sm), "PIN: ${web_pin}");
+        it.print(0, 48, id(oled_font_sm), "PIN: ${web_pin}");
       }
 
 sprinkler:
