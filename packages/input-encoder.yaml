@@ -11,7 +11,7 @@
 # into ADJUST mode; a short-press on the Status card while a MANUAL zone is running
 # also enters ADJUST mode. In ADJUST mode the display shows the live countdown and
 # rotating the dial changes the run length by +/- 1 min. The new total is committed
-# (without interrupting the active run) on either a press or 3 s of no input:
+# (without interrupting the active run) on either a press or 7 s of no input:
 #
 #   - SHORTENING: the brain stops the run early when the live remaining counts down
 #     to the user's target (single click at the new endpoint, no double-click).
@@ -47,14 +47,14 @@ substitutions:
   encoder_pin_b: GPIO33
   encoder_pin_btn: GPIO27
 
-# Auto-commit any pending ADJUST target and return to the Status card after 3 s
+# Auto-commit any pending ADJUST target and return to the Status card after 7 s
 # of no input. `mode: restart` cancels the pending delay and re-arms it each
 # time an encoder event fires.
 script:
   - id: esp_ui_idle
     mode: restart
     then:
-      - delay: 3s
+      - delay: 7s
       - lambda: |-
           // Commit ADJUST target by SETTING pending state; the deferred-action
           // interval below picks it up and either shortens or extends without

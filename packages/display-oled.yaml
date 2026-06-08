@@ -76,6 +76,9 @@ font:
     id: oled_font_sm
     size: 12
   - file: "gfonts://Roboto@500"
+    id: oled_font_md
+    size: 19
+  - file: "gfonts://Roboto@500"
     id: oled_font_lg
     size: 20
 
@@ -151,7 +154,7 @@ display:
       const int card = ((id(esp_ui_card) % total_cards) + total_cards) % total_cards;
 
       if (card == 0) {  // STATUS
-        it.print(0, 0, id(oled_font_lg), "ESPrinkler");
+        it.print(0, 0, id(oled_font_md), "ESPrinkler");
         std::string st = id(esp_state).has_state() ? id(esp_state).state : "—";
         it.printf(0, 26, id(oled_font_sm), "State: %s", st.c_str());
         if (st == "running" || st == "manual") {
@@ -218,7 +221,7 @@ display:
           else
             snprintf(up, sizeof(up), "Up: %dm %ds", s / 60, s % 60);
         }
-        it.printf(0, 26, id(oled_font_sm), "%s   z:%d", up, z);
+        it.print(0, 26, id(oled_font_sm), up);
         std::string ip = id(esp_ip).has_state() ? id(esp_ip).state : "--";
         it.printf(0, 38, id(oled_font_sm), "IP: %s", ip.c_str());
         it.print(0, 50, id(oled_font_sm), "PIN: ${web_pin}");
