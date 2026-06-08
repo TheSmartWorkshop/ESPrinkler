@@ -70,6 +70,10 @@ globals:
 i2c:
   sda: ${oled_sda}
   scl: ${oled_scl}
+  # SSD1306s do 400 kHz happily. ESPHome's I2C default is 50 kHz which makes
+  # the 1 KB framebuffer push take ~180 ms -- almost a full render window,
+  # so the per-second countdown looked like it ticked every other second.
+  frequency: 400kHz
 
 font:
   - file: "gfonts://Roboto"
@@ -135,9 +139,15 @@ display:
       // ADJUST mode trumps the card stack: live countdown + edit indicator.
       // The countdown reflects the user's TARGET (so they see the value they're
       // dialing); the actual sprinkler run continues uninterrupted underneath.
+      // Header doubles as immediate "Started" feedback once esp_state confirms
+      // the start went through.
       if (id(esp_ui_mode) == 1) {
         std::string zone = id(esp_active_zone).has_state() ? id(esp_active_zone).state : "—";
-        it.print(0, 0, id(oled_font_sm), "Adjust run");
+        std::string st = id(esp_state).has_state() ? id(esp_state).state : std::string();
+        const char *header =
+            (st == "running" || st == "manual") ? "Running" :
+            (st == "paused") ? "Paused" : "Adjust run";
+        it.print(0, 0, id(oled_font_sm), header);
         it.printf(0, 14, id(oled_font_sm), "%s", zone.c_str());
         int t = id(esp_ui_adjust_target);
         if (t < 0) t = 0;

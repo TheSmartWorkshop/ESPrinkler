@@ -42,10 +42,20 @@
 
 substitutions:
   sprinkler_controller: yard
+  brain_id: esprinkler_brain
   zone_count: "4"
   encoder_pin_a: GPIO32
   encoder_pin_b: GPIO33
   encoder_pin_btn: GPIO27
+
+# Idle delay is a global so we can shorten it (to 3 s) for the brief moment
+# right after a manual zone start -- gives the user a quick "Started" glance
+# without making them stare at the ADJUST screen for the full 7 s default.
+globals:
+  - id: esp_ui_idle_ms
+    type: int
+    restore_value: false
+    initial_value: "7000"
 
 # Auto-commit any pending ADJUST target and return to the Status card after 7 s
 # of no input. `mode: restart` cancels the pending delay and re-arms it each
@@ -54,8 +64,11 @@ script:
   - id: esp_ui_idle
     mode: restart
     then:
-      - delay: 7s
+      - delay: !lambda 'return id(esp_ui_idle_ms);'
       - lambda: |-
+          // Reset to the long default after the script runs so subsequent
+          // interactions get the slower auto-return.
+          id(esp_ui_idle_ms) = 7000;
           // Commit ADJUST target by SETTING pending state; the deferred-action
           // interval below picks it up and either shortens or extends without
           // interrupting the active run.
@@ -138,8 +151,19 @@ sensor:
               if (t > 4 * 3600) t = 4 * 3600;
               id(esp_ui_adjust_target) = t;
             } else {
-              const int n = 7 + ${zone_count};
-              id(esp_ui_card) = (id(esp_ui_card) + 1) % n;
+              const int z = ${zone_count};
+              const int n = 7 + z;
+              int c = id(esp_ui_card);
+              // Step forward, skipping disabled zone cards.
+              for (int i = 0; i < n; i++) {
+                c = (c + 1) % n;
+                if (c >= 1 && c <= z) {
+                  auto *sw = id(${sprinkler_controller}).enable_switch(c - 1);
+                  if (sw != nullptr && !sw->state) continue;
+                }
+                break;
+              }
+              id(esp_ui_card) = c;
             }
         - script.execute: esp_ui_idle
     on_anticlockwise:
@@ -150,8 +174,18 @@ sensor:
               if (t < 60) t = 60;
               id(esp_ui_adjust_target) = t;
             } else {
-              const int n = 7 + ${zone_count};
-              id(esp_ui_card) = (id(esp_ui_card) + n - 1) % n;
+              const int z = ${zone_count};
+              const int n = 7 + z;
+              int c = id(esp_ui_card);
+              for (int i = 0; i < n; i++) {
+                c = (c + n - 1) % n;
+                if (c >= 1 && c <= z) {
+                  auto *sw = id(${sprinkler_controller}).enable_switch(c - 1);
+                  if (sw != nullptr && !sw->state) continue;
+                }
+                break;
+              }
+              id(esp_ui_card) = c;
             }
         - script.execute: esp_ui_idle
 
@@ -214,6 +248,14 @@ binary_sensor:
                 } else {
                   s->start_single_valve(zi);
                   id(esp_ui_adjust_target) = (int) s->valve_run_duration(zi);
+                  // Nudge the brain so esp_state flips to manual / running on
+                  // this tick instead of waiting up to ~1 s, so the ADJUST
+                  // header shows "Running" within a frame.
+                  id(${brain_id}).update();
+                  // Shorter auto-return for a fresh manual start (3 s vs 7 s);
+                  // enough to see the "Running" header pop up and the countdown
+                  // start, without staring at it.
+                  id(esp_ui_idle_ms) = 3000;
                 }
                 id(esp_ui_mode) = 1;
               } else if (card == z + 1) {

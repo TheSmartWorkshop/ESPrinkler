@@ -49,6 +49,9 @@ external_components:
 i2c:
   sda: GPIO21
   scl: GPIO22
+  # 400 kHz: cuts the SSD1306 framebuffer push from ~180 ms (ESPHome's 50 kHz
+  # default) to ~23 ms so the per-second countdown actually ticks every second.
+  frequency: 400kHz
 
 font:
   - file: "gfonts://Roboto"
@@ -150,9 +153,15 @@ display:
         return zone_label((int) *av);
       };
       // ADJUST mode trumps the card stack: live target + edit indicator.
+      // Header switches to "Running" once esp_state confirms the start --
+      // visible feedback that the press actually fired.
       if (id(esp_ui_mode) == 1) {
         std::string zone = active_zone_label();
-        it.print(0, 0, id(oled_font_sm), "Adjust run");
+        std::string st = id(esp_state).has_state() ? id(esp_state).state : std::string();
+        const char *header =
+            (st == "running" || st == "manual") ? "Running" :
+            (st == "paused") ? "Paused" : "Adjust run";
+        it.print(0, 0, id(oled_font_sm), header);
         it.printf(0, 14, id(oled_font_sm), "%s", zone.c_str());
         int t = id(esp_ui_adjust_target);
         if (t < 0) t = 0;
@@ -252,6 +261,7 @@ sprinkler:
       - { valve_switch: "Zone 4", enable_switch: "Zone 4 Enabled", valve_switch_id: relay_4, pump_switch_id: pump_relay, run_duration_number: { name: "Zone 4 Duration", initial_value: 30, unit_of_measurement: min } }
 
 esprinkler:
+  id: esprinkler_brain
   sprinkler_id: yard
   time_id: sntp_time
   state:
@@ -330,13 +340,20 @@ globals:
     type: int
     restore_value: false
     initial_value: "0"
+  # Idle delay (ms). Default 7 s; shortened to 3 s right after a manual zone
+  # start so the user gets a quick glance at "Running" without staring.
+  - id: esp_ui_idle_ms
+    type: int
+    restore_value: false
+    initial_value: "7000"
 
-# Auto-commit ADJUST target as pending state and return to Status after 7 s idle.
+# Auto-commit ADJUST target as pending state and return to Status after the
+# idle delay (templated -- see esp_ui_idle_ms above).
 script:
   - id: esp_ui_idle
     mode: restart
     then:
-      - delay: 7s
+      - delay: !lambda 'return id(esp_ui_idle_ms);'
       - lambda: |-
           if (id(esp_ui_mode) == 1) {
             auto active = id(yard).active_valve();
@@ -359,6 +376,8 @@ script:
           }
           id(esp_ui_mode) = 0;
           id(esp_ui_card) = 0;
+          // Reset idle delay back to the slow default after firing.
+          id(esp_ui_idle_ms) = 7000;
 
 # Process the deferred adjust each second.
 interval:
@@ -407,7 +426,18 @@ sensor:
               if (t > 4 * 3600) t = 4 * 3600;
               id(esp_ui_adjust_target) = t;
             } else {
-              id(esp_ui_card) = (id(esp_ui_card) + 1) % 11;
+              const int z = 4;
+              const int n = 7 + z;
+              int c = id(esp_ui_card);
+              for (int i = 0; i < n; i++) {
+                c = (c + 1) % n;
+                if (c >= 1 && c <= z) {
+                  auto *sw = id(yard).enable_switch(c - 1);
+                  if (sw != nullptr && !sw->state) continue;  // skip disabled
+                }
+                break;
+              }
+              id(esp_ui_card) = c;
             }
         - script.execute: esp_ui_idle
     on_anticlockwise:
@@ -418,7 +448,18 @@ sensor:
               if (t < 60) t = 60;
               id(esp_ui_adjust_target) = t;
             } else {
-              id(esp_ui_card) = (id(esp_ui_card) + 10) % 11;
+              const int z = 4;
+              const int n = 7 + z;
+              int c = id(esp_ui_card);
+              for (int i = 0; i < n; i++) {
+                c = (c + n - 1) % n;
+                if (c >= 1 && c <= z) {
+                  auto *sw = id(yard).enable_switch(c - 1);
+                  if (sw != nullptr && !sw->state) continue;
+                }
+                break;
+              }
+              id(esp_ui_card) = c;
             }
         - script.execute: esp_ui_idle
   - platform: uptime
@@ -484,6 +525,14 @@ binary_sensor:
                 } else {
                   s->start_single_valve(zi);
                   id(esp_ui_adjust_target) = (int) s->valve_run_duration(zi);
+                  // Nudge the brain to publish state immediately so the ADJUST
+                  // header flips to "Running" on this tick (instead of waiting
+                  // up to ~1 s for the next poll).
+                  id(esprinkler_brain).update();
+                  // Shorter idle (3 s vs 7 s) for a fresh manual start: gives
+                  // the user a quick glance at "Running" without making them
+                  // stare at the ADJUST screen.
+                  id(esp_ui_idle_ms) = 3000;
                 }
                 id(esp_ui_mode) = 1;
               } else if (card == z + 1) {
