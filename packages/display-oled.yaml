@@ -118,7 +118,9 @@ display:
             int h = now.hour;
             int h12 = h % 12;
             if (h12 == 0) h12 = 12;
-            snprintf(tb, sizeof(tb), "%d:%02d%s", h12, now.minute, h >= 12 ? "PM" : "AM");
+            // Lowercase a/p saves a glyph vs AM/PM -- keeps the right column narrow
+            // enough that the larger Status header doesn't bump into it.
+            snprintf(tb, sizeof(tb), "%d:%02d%s", h12, now.minute, h >= 12 ? "p" : "a");
           } else {
             now.strftime(tb, sizeof(tb), "%H:%M");
           }
@@ -167,7 +169,7 @@ display:
             displayed = -1;
           }
           if (displayed >= 0)
-            it.printf(0, 52, id(oled_font_sm), "Left: %d:%02d", displayed / 60, displayed % 60);
+            it.printf(0, 52, id(oled_font_sm), "Remaining: %d:%02d", displayed / 60, displayed % 60);
         } else {
           std::string next = id(esp_next_run).has_state() ? id(esp_next_run).state : "—";
           it.printf(0, 52, id(oled_font_sm), "Next: %s", next.c_str());

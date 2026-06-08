@@ -64,6 +64,9 @@ class ESPrinkler : public PollingComponent {
   void set_active_zone_text_sensor(text_sensor::TextSensor *s) { this->active_zone_ts_ = s; }
   void set_next_run_text_sensor(text_sensor::TextSensor *s) { this->next_run_ts_ = s; }
   void set_total_remaining_sensor(sensor::Sensor *s) { this->total_remaining_sensor_ = s; }
+  void set_total_remaining_text_sensor(text_sensor::TextSensor *s) {
+    this->total_remaining_text_sensor_ = s;
+  }
   void set_rain_delay_number(RainDelayNumber *n) { this->rain_delay_number_ = n; }
   void set_schedule_enabled_switch(ScheduleEnabledSwitch *s) {
     this->schedule_enabled_switch_ = s;
@@ -95,6 +98,7 @@ class ESPrinkler : public PollingComponent {
   text_sensor::TextSensor *active_zone_ts_{nullptr};
   text_sensor::TextSensor *next_run_ts_{nullptr};
   sensor::Sensor *total_remaining_sensor_{nullptr};
+  text_sensor::TextSensor *total_remaining_text_sensor_{nullptr};
   RainDelayNumber *rain_delay_number_{nullptr};
   ScheduleEnabledSwitch *schedule_enabled_switch_{nullptr};
 
@@ -111,6 +115,7 @@ class ESPrinkler : public PollingComponent {
   std::string last_state_;
   std::string last_active_zone_;
   std::string last_next_run_;
+  std::string last_total_remaining_text_;
   float last_rain_delay_published_{-1.0f};
   int32_t last_total_remaining_{-1};
   // Per-zone last-published values, sized when zones_ is grown.

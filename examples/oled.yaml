@@ -113,7 +113,7 @@ display:
             int h = now.hour;
             int h12 = h % 12;
             if (h12 == 0) h12 = 12;
-            snprintf(tb, sizeof(tb), "%d:%02d%s", h12, now.minute, h >= 12 ? "PM" : "AM");
+            snprintf(tb, sizeof(tb), "%d:%02d%s", h12, now.minute, h >= 12 ? "p" : "a");
           } else {
             now.strftime(tb, sizeof(tb), "%H:%M");
           }
@@ -122,9 +122,33 @@ display:
         it.print(128, 0, id(oled_font_sm), TextAlign::TOP_RIGHT, tb);
         it.print(128, 12, id(oled_font_sm), TextAlign::TOP_RIGHT, db);
       }
+      // Friendly-name lookup: the sprinkler block uses generic "Zone N" names;
+      // the user can rename via the zoneN_name text entities (web UI / HA),
+      // and we use those for display. Falls back to a sensible default if the
+      // text entity is empty.
+      auto zone_label = [&](int zi) -> std::string {
+        std::string s;
+        switch (zi) {
+          case 0: s = id(zone1_name).state; break;
+          case 1: s = id(zone2_name).state; break;
+          case 2: s = id(zone3_name).state; break;
+          case 3: s = id(zone4_name).state; break;
+        }
+        if (s.empty()) {
+          char buf[12];
+          snprintf(buf, sizeof(buf), "Zone %d", zi + 1);
+          s = buf;
+        }
+        return s;
+      };
+      auto active_zone_label = [&]() -> std::string {
+        auto av = id(yard).active_valve();
+        if (!av.has_value()) return "—";
+        return zone_label((int) *av);
+      };
       // ADJUST mode trumps the card stack: live target + edit indicator.
       if (id(esp_ui_mode) == 1) {
-        std::string zone = id(esp_active_zone).has_state() ? id(esp_active_zone).state : "—";
+        std::string zone = active_zone_label();
         it.print(0, 0, id(oled_font_sm), "Adjust run");
         it.printf(0, 14, id(oled_font_sm), "%s", zone.c_str());
         int t = id(esp_ui_adjust_target);
@@ -143,7 +167,7 @@ display:
         std::string st = id(esp_state).has_state() ? id(esp_state).state : "—";
         it.printf(0, 26, id(oled_font_sm), "State: %s", st.c_str());
         if (st == "running" || st == "manual") {
-          std::string zone = id(esp_active_zone).has_state() ? id(esp_active_zone).state : "—";
+          std::string zone = active_zone_label();
           it.printf(0, 40, id(oled_font_sm), "Zone: %s", zone.c_str());
           int displayed;
           if (id(esp_pending_stop_in_secs) > 0) {
@@ -154,19 +178,16 @@ display:
             displayed = -1;
           }
           if (displayed >= 0)
-            it.printf(0, 52, id(oled_font_sm), "Left: %d:%02d", displayed / 60, displayed % 60);
+            it.printf(0, 52, id(oled_font_sm), "Remaining: %d:%02d", displayed / 60, displayed % 60);
         } else {
           std::string next = id(esp_next_run).has_state() ? id(esp_next_run).state : "—";
           it.printf(0, 52, id(oled_font_sm), "Next: %s", next.c_str());
         }
       } else if (card >= 1 && card <= z) {  // ZONE i
         int zi = card - 1;
-        char title[20];
-        snprintf(title, sizeof(title), "Zone %d", zi + 1);
-        it.print(0, 26, id(oled_font_lg), title);
-        const char *vn = id(yard).valve_name(zi);
-        if (vn != nullptr && vn[0] != '\0')
-          it.printf(0, 14, id(oled_font_sm), "%s", vn);
+        std::string label = zone_label(zi);
+        it.printf(0, 14, id(oled_font_sm), "Zone %d", zi + 1);
+        it.print(0, 26, id(oled_font_lg), label.c_str());
         it.print(0, 52, id(oled_font_sm), "Press to run");
       } else if (card == z + 1) {
         it.print(0, 26, id(oled_font_lg), "Start all");
@@ -218,11 +239,14 @@ sprinkler:
     repeat_number:
       name: "Repeat"
     pump_start_pump_delay: 3s
+    # Generic compile-time names ("Zone N"). Friendly labels live in the runtime
+    # `text:` entities below, editable from the web UI / HA -- so users don't
+    # need to flash to relabel their zones.
     valves:
-      - { valve_switch: "Front Lawn", enable_switch: "Front Lawn Enabled", valve_switch_id: relay_1, pump_switch_id: pump_relay, run_duration_number: { name: "Front Lawn Duration", initial_value: 15, unit_of_measurement: min } }
-      - { valve_switch: "Back Lawn", enable_switch: "Back Lawn Enabled", valve_switch_id: relay_2, pump_switch_id: pump_relay, run_duration_number: { name: "Back Lawn Duration", initial_value: 15, unit_of_measurement: min } }
-      - { valve_switch: "Flower Beds", enable_switch: "Flower Beds Enabled", valve_switch_id: relay_3, pump_switch_id: pump_relay, run_duration_number: { name: "Flower Beds Duration", initial_value: 25, unit_of_measurement: min } }
-      - { valve_switch: "Veg Garden", enable_switch: "Veg Garden Enabled", valve_switch_id: relay_4, pump_switch_id: pump_relay, run_duration_number: { name: "Veg Garden Duration", initial_value: 30, unit_of_measurement: min } }
+      - { valve_switch: "Zone 1", enable_switch: "Zone 1 Enabled", valve_switch_id: relay_1, pump_switch_id: pump_relay, run_duration_number: { name: "Zone 1 Duration", initial_value: 15, unit_of_measurement: min } }
+      - { valve_switch: "Zone 2", enable_switch: "Zone 2 Enabled", valve_switch_id: relay_2, pump_switch_id: pump_relay, run_duration_number: { name: "Zone 2 Duration", initial_value: 15, unit_of_measurement: min } }
+      - { valve_switch: "Zone 3", enable_switch: "Zone 3 Enabled", valve_switch_id: relay_3, pump_switch_id: pump_relay, run_duration_number: { name: "Zone 3 Duration", initial_value: 25, unit_of_measurement: min } }
+      - { valve_switch: "Zone 4", enable_switch: "Zone 4 Enabled", valve_switch_id: relay_4, pump_switch_id: pump_relay, run_duration_number: { name: "Zone 4 Duration", initial_value: 30, unit_of_measurement: min } }
 
 esprinkler:
   sprinkler_id: yard
@@ -239,17 +263,35 @@ esprinkler:
   total_remaining:
     name: "Total Time Remaining"
     id: esp_total_remaining
+  # Human-friendly "M:SS" version of the above, for the ESPHome web UI (which
+  # otherwise just shows raw seconds). The numeric sensor is still used by the
+  # OLED + automations.
+  total_remaining_text:
+    name: "Time Remaining"
+    id: esp_total_remaining_text
   rain_delay: { name: "Rain Delay", id: esp_rain_delay }
   schedule_enabled: { name: "Schedule Enabled", id: esp_schedule_enabled }
   zones:
-    - { name: "Front Lawn", flow_type: sprinkler, active: { name: "Front Lawn Active" }, remaining: { name: "Front Lawn Remaining" } }
-    - { name: "Back Lawn", flow_type: sprinkler, active: { name: "Back Lawn Active" }, remaining: { name: "Back Lawn Remaining" } }
-    - { name: "Flower Beds", flow_type: drip, active: { name: "Flower Beds Active" }, remaining: { name: "Flower Beds Remaining" } }
-    - { name: "Veg Garden", flow_type: drip, active: { name: "Veg Garden Active" }, remaining: { name: "Veg Garden Remaining" } }
+    - { name: "Zone 1", flow_type: sprinkler, active: { name: "Zone 1 Active" }, remaining: { name: "Zone 1 Remaining" } }
+    - { name: "Zone 2", flow_type: sprinkler, active: { name: "Zone 2 Active" }, remaining: { name: "Zone 2 Remaining" } }
+    - { name: "Zone 3", flow_type: drip, active: { name: "Zone 3 Active" }, remaining: { name: "Zone 3 Remaining" } }
+    - { name: "Zone 4", flow_type: drip, active: { name: "Zone 4 Active" }, remaining: { name: "Zone 4 Remaining" } }
   scheduler:
     programs:
       - start_time: "05:30"
         days: weekends
+
+# --- Friendly zone-name overrides ---------------------------------------------------
+# Sprinkler valve_switch entities above are named generically ("Zone N") so the
+# HA entity_ids stay stable; here we expose one editable text per zone so the
+# user can call them "Front Lawn" / "Veg Garden" / etc. from the ESPHome web UI
+# (or HA's text-input card). The OLED lambda below reads these for display, and
+# `restore_value: true` persists the user's labels across reboots.
+text:
+  - { platform: template, name: "Zone 1 Name", id: zone1_name, optimistic: true, initial_value: "Zone 1", restore_value: true, mode: text, min_length: 1, max_length: 24, icon: "mdi:rename" }
+  - { platform: template, name: "Zone 2 Name", id: zone2_name, optimistic: true, initial_value: "Zone 2", restore_value: true, mode: text, min_length: 1, max_length: 24, icon: "mdi:rename" }
+  - { platform: template, name: "Zone 3 Name", id: zone3_name, optimistic: true, initial_value: "Zone 3", restore_value: true, mode: text, min_length: 1, max_length: 24, icon: "mdi:rename" }
+  - { platform: template, name: "Zone 4 Name", id: zone4_name, optimistic: true, initial_value: "Zone 4", restore_value: true, mode: text, min_length: 1, max_length: 24, icon: "mdi:rename" }
 
 # --- Rotary encoder + button (card-stack UX over the OLED) --------------------------
 # UI state plus the deferred-adjust slots: instead of an immediate shutdown +

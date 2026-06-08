@@ -46,6 +46,7 @@ CONF_STATE = "state"
 CONF_ACTIVE_ZONE = "active_zone"
 CONF_NEXT_RUN = "next_run"
 CONF_TOTAL_REMAINING = "total_remaining"
+CONF_TOTAL_REMAINING_TEXT = "total_remaining_text"
 CONF_ZONES = "zones"
 CONF_FLOW_TYPE = "flow_type"
 CONF_ACTIVE = "active"
@@ -184,6 +185,9 @@ CONFIG_SCHEMA = cv.All(
                 # (or any unchanged value) between ticks.
                 filters=[{"delta": 1}],
             ),
+            cv.Optional(CONF_TOTAL_REMAINING_TEXT): text_sensor.text_sensor_schema(
+                icon="mdi:timer-sand",
+            ),
             cv.Optional(CONF_RAIN_DELAY): number.number_schema(
                 RainDelayNumber,
                 unit_of_measurement=UNIT_HOUR,
@@ -233,6 +237,12 @@ async def to_code(config):
         cg.add(
             var.set_total_remaining_sensor(
                 await sensor.new_sensor(config[CONF_TOTAL_REMAINING])
+            )
+        )
+    if CONF_TOTAL_REMAINING_TEXT in config:
+        cg.add(
+            var.set_total_remaining_text_sensor(
+                await text_sensor.new_text_sensor(config[CONF_TOTAL_REMAINING_TEXT])
             )
         )
 

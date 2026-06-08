@@ -113,16 +113,24 @@ void ESPrinkler::publish_state_() {
       active_remaining = *tr;
   }
 
-  // Total remaining = current valve + everything still queued. De-dup: only
-  // publish when the integer-second value changes (it's a per-tick number so
-  // without de-dup we'd emit a state every second forever).
-  if (this->total_remaining_sensor_ != nullptr) {
-    uint32_t total = active_remaining;
-    if (active.has_value())
-      total += this->sprinkler_->total_queue_time();
-    if ((int32_t) total != this->last_total_remaining_) {
-      this->total_remaining_sensor_->publish_state(total);
-      this->last_total_remaining_ = (int32_t) total;
+  // Total remaining = current valve + everything still queued. Compute once and
+  // de-dup both the numeric sensor and the human "M:SS" text sensor (the latter
+  // is what HA and the ESPHome web UI display; numeric stays available for math).
+  uint32_t total_remaining = active_remaining;
+  if (active.has_value())
+    total_remaining += this->sprinkler_->total_queue_time();
+  if (this->total_remaining_sensor_ != nullptr &&
+      (int32_t) total_remaining != this->last_total_remaining_) {
+    this->total_remaining_sensor_->publish_state(total_remaining);
+    this->last_total_remaining_ = (int32_t) total_remaining;
+  }
+  if (this->total_remaining_text_sensor_ != nullptr) {
+    char tbuf[10];
+    snprintf(tbuf, sizeof(tbuf), "%u:%02u", total_remaining / 60u, total_remaining % 60u);
+    std::string txt(tbuf);
+    if (txt != this->last_total_remaining_text_) {
+      this->total_remaining_text_sensor_->publish_state(txt);
+      this->last_total_remaining_text_ = txt;
     }
   }
 
