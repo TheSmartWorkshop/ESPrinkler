@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "custom-card-helpers";
 import type { ESPrinklerCardConfig, ZoneConfig, ZoneMapConfig } from "./types";
 
-const CARD_VERSION = "0.2.0";
+const CARD_VERSION = "0.3.0";
 
 const STATE_ICON: Record<string, string> = {
   idle: "mdi:water-off",
@@ -31,6 +31,20 @@ export class ESPrinklerCard extends LitElement {
   public getCardSize(): number {
     const map = this.config?.zone_map ? 4 : 0;
     return 2 + map + (this.config?.zones.length ?? 0);
+  }
+
+  private zoneName(zone: ZoneConfig): string {
+    // Priority: static name -> name_entity state -> valve's friendly_name -> "Zone".
+    if (zone.name) return zone.name;
+    if (zone.name_entity) {
+      const s = this.stateOf(zone.name_entity);
+      if (s && s !== "unavailable" && s !== "unknown") return s;
+    }
+    if (zone.valve) {
+      const friendly = this.hass.states[zone.valve]?.attributes.friendly_name;
+      if (friendly) return String(friendly);
+    }
+    return "Zone";
   }
 
   private runZone(zone: ZoneConfig): void {
@@ -141,7 +155,7 @@ export class ESPrinklerCard extends LitElement {
           if (!pos) return nothing;
           const active = this.isOn(z.active) || this.isOn(z.valve);
           const remaining = this.fmtRemaining(z.remaining);
-          const label = z.name ?? "Zone";
+          const label = this.zoneName(z);
           return html`
             <button
               class="map-pin ${active ? "active" : ""}"
@@ -163,10 +177,7 @@ export class ESPrinklerCard extends LitElement {
     const remaining = this.fmtRemaining(zone.remaining);
     const enabled = zone.enable ? this.isOn(zone.enable) : true;
     const duration = zone.duration ? this.stateOf(zone.duration) : undefined;
-    const name =
-      zone.name ??
-      (zone.valve ? this.hass.states[zone.valve]?.attributes.friendly_name : undefined) ??
-      "Zone";
+    const name = this.zoneName(zone);
 
     return html`
       <div class="zone ${active ? "active" : ""} ${enabled ? "" : "disabled"}">

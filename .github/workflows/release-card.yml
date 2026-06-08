@@ -1,0 +1,40 @@
+name: Release card
+
+on:
+  push:
+    tags:
+      - "card-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: card/package-lock.json
+
+      - name: Build card
+        working-directory: card
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+
+      # HACS pulls the bundle directly from the release assets by basename
+      # (see hacs.json `filename`). Uploading the file at the root of the
+      # release (no `dist/` prefix) is what HACS expects.
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: card/dist/esprinkler-card.js

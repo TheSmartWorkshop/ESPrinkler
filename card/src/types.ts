@@ -8,7 +8,14 @@ export interface MapPosition {
 
 /** A single zone's entity bindings (entity contract: per-zone entities). */
 export interface ZoneConfig {
+  /** Static display name. If unset, falls back to `name_entity` (if any),
+   *  then to the valve's friendly_name, then to "Zone". */
   name?: string;
+  /** text.* — a user-editable zone label (template text entity on the
+   *  firmware side). When set, this entity's value is shown in place of the
+   *  static name and updates live as the user renames in HA or the
+   *  ESPHome web UI. */
+  name_entity?: string;
   /** switch.* — the valve (raw on/off). */
   valve?: string;
   /** switch.* — include this zone in automatic cycles. */
