@@ -23,8 +23,10 @@ Open in SketchUp (desktop or Web). To produce STLs for printing, select the
 | --- | --- | --- |
 | Width (X) | 4.50 | 114 |
 | Depth (Y) | 3.00 | 76 |
-| Height (Z) | 1.85 | 47 |
+| Height (Z) | 1.45 | 37 |
 | Wall / lid thickness | 0.10 | 2.5 |
+
+The case body is **1.45"** tall; the rotary knob adds ~0.65" above the lid.
 
 ## Two printable parts
 
@@ -39,8 +41,8 @@ Open-top tray, walls 0.10" thick. Cutouts:
 | --- | --- | --- | --- |
 | Right | USB-C access | 0.55w x 0.35h | Y 2.025-2.575, Z 0.40-0.75 |
 | Back | Wire entry slot | 1.50w x 0.20h | X 1.50-3.00, Z 0.20-0.40 |
-| Back | Wall-mount hole (left) | dia 0.36 | (X 0.55, Z 1.30) |
-| Back | Wall-mount hole (right) | dia 0.36 | (X 3.95, Z 1.30) |
+| Back | Wall-mount hole (left) | dia 0.36 | (X 0.55, Z 1.05) |
+| Back | Wall-mount hole (right) | dia 0.36 | (X 3.95, Z 1.05) |
 | Front | — (smooth) | — | — |
 | Left | — (smooth) | — | — |
 
@@ -50,7 +52,7 @@ a #8 pan head). Wires drop in through the cable slot under the screws.
 Internal mounting bosses (all 0.18 OD cylindrical posts unless noted):
 
 - **4 lid screw posts** at corners (0.30, 0.30), (4.20, 0.30), (4.20, 2.70),
-  (0.30, 2.70) — 0.26 OD, 1.65 tall, accept self-tapping screws from the lid.
+  (0.30, 2.70) — 0.26 OD, 1.25 tall, accept self-tapping screws from the lid.
 - **4 relay-module standoffs** at PCB-hole positions for a generic 2-channel
   relay module (~50 x 39 mm PCB) — 0.18 tall.
 - **2 ESP32-C3 standoffs** on the non-USB end of the XIAO board, oriented so
@@ -58,14 +60,18 @@ Internal mounting bosses (all 0.18 OD cylindrical posts unless noted):
 
 ### Lid
 
-Flat plate with cutouts and a perimeter lip for friction-fit alignment.
+Flat plate with cutouts and a perimeter lip frame for friction-fit alignment.
 
 | Feature | Dimensions | World location on lid |
 | --- | --- | --- |
 | OLED window | 1.10w x 0.60d | X 0.60-1.70, Y 0.45-1.05 |
 | Rotary shaft hole | dia 0.36 | (X 3.40, Y 0.75) |
 | 4 lid screw clearance holes | dia 0.15 | corners (0.30, 0.30) etc. |
-| Interior lip | (W-0.22) x (D-0.22) x 0.06 | centered |
+| Interior lip frame | 4.28 x 2.78 outer, 0.12 wide, 0.06 deep | centered |
+
+The lip is a **perimeter frame** (a thin rectangular ring around the edge),
+not a solid plate — so it clears the OLED window and the OLED standoffs that
+hang from the lid underside.
 
 Four **OLED standoffs** (0.18 OD x 0.20 tall) hang from the lid underside at
 (0.70, 0.30), (1.60, 0.30), (1.60, 1.20), (0.70, 1.20) — the 23 mm x 23 mm
