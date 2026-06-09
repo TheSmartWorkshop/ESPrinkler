@@ -2,10 +2,12 @@
 
 A 3D-printable enclosure for a minimum-viable ESPrinkler build: **ESP32-C3**,
 **OLED 128x64**, **rotary encoder + push button**, **2-channel relay**.
-Designed for wall mounting with the controls on top: the back sits against the
-wall, the box protrudes like a small shelf, and you look down at the OLED and
-reach the knob from above. The lid snaps closed — no fasteners — and carries a
-recessed **ESPrinkler** wordmark with a sprinkler-spray logo.
+Mounts plaque-style: the bottom sits flat against the drywall and the lid —
+display, knob, and engraved branding — faces the room. Hang it rotated so the
+**OLED sits upper-right and the knob upper-left**; the engraving is oriented
+for exactly that position (it reads upside-down in the model's plan view on
+purpose), and the cable slot ends up facing down for a clean wire drop. The
+lid snaps closed — no fasteners.
 
 ![closed](img/closed.png)
 
@@ -44,10 +46,10 @@ Open-top tray, walls 0.10" thick.
 | Front + Back | Snap windows (2 each) | 0.34w x 0.07h | X 1.13–1.47 & 3.03–3.37, Z 1.13–1.20 |
 | Left | — (smooth) | — | — |
 
-**Exterior wall-mount screw tabs:** one per side, flush with the back face so
-the box mounts tight to drywall. Each tab is 0.60 x 0.70 x 0.16" with a 0.18"
-(4.6 mm) through-hole — sized for a common **#6 drywall screw** (3.5 mm shank,
-8 mm head). No need to open the case to mount it.
+**Exterior wall-mount screw tabs:** one per side, lying flat in the plane of
+the bottom plate (0.60 x 0.70 x 0.16", hole dia 0.18" / 4.6 mm). With the
+bottom against the drywall, a common **#6 drywall screw** drives straight
+through each tab into the wall — no need to open the case to mount it.
 
 Interior standoffs (cylindrical posts, 0.18" tall):
 
@@ -81,21 +83,29 @@ Flat plate, 0.10" thick, with a snap lip frame underneath.
   front and back) with a fingernail or small screwdriver while lifting.
 - **Engraving:** "ESPrinkler" in a stencil typeface (6.6 mm caps) plus a
   spray-arc logo — a nozzle square with three fanning arcs — recessed 0.6 mm
-  into the top surface. Prints crisply with the lid face-down on the bed.
+  into the top surface. Oriented for the mounted position (OLED upper-right),
+  so it appears rotated 180° in the model's plan view. Prints crisply with
+  the lid face-down on the bed.
 
-## Layout (top view)
+## Layout
+
+Model plan view (SketchUp coordinates):
 
 ```
-   +-----------------------------------+   <- back wall (cable slot low)
-[T]|                                   |[T] <- screw tabs, flush w/ back face
+   +-----------------------------------+   <- back wall (cable slot)
+[T]|                                   |[T] <- screw tabs, flat on bottom plane
    |       [ Relay ][ Relay ]          |
    |       term     term               |
-   |   )))                             |   <- engraved logo + "ESPrinkler"
+   |       ɹǝʃʞuıɹdSƎ  (((             |   <- engraving (rotated 180°)
    |                       [ESP32]     |   <- XIAO, USB-C facing right wall
    |       [OLED]    (knob)            |   <- window + 7mm shaft hole in lid
    +--[=]----------------[=]-----------+   <- front wall snap slots
        0                            4.5  (X, inches)
 ```
+
+As mounted on the wall (rotate the above 180°): OLED upper-right, knob
+upper-left, "ESPrinkler" + logo reading correctly below them, cable slot at
+the bottom edge, USB-C access on the left edge.
 
 ## Print notes
 
