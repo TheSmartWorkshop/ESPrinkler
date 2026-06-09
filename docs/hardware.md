@@ -68,3 +68,11 @@ Without an encoder the OLED still shows the Status card; you just lose the menu 
 > **Power note for outdoor installs:** 24 VAC irrigation transformers are common; a small
 > AC→5 V buck (or a separate 5 V supply) powers the ESP32 + relay board. Enclosure and power
 > are installer concerns, not firmware — ESPrinkler stays indifferent to indoor vs. outdoor.
+
+## Reference 3D-printable enclosure
+
+A printable starter case for a minimum-viable build (ESP32-C3 + OLED 128x64 + rotary
+encoder + 2-channel relay) lives under [`hardware/enclosure-2zone/`](hardware/enclosure-2zone/README.md).
+SketchUp source files (`.skp`) and a parts/print guide are included. The lid carries the
+OLED and the knob so the case can be wall-mounted with the back against the wall and the
+controls facing up.
