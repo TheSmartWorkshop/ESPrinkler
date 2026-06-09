@@ -1,9 +1,11 @@
-# 2-Zone Enclosure (top-mount controls)
+# 2-Zone Enclosure (snap-fit lid, top-mount controls)
 
 A 3D-printable enclosure for a minimum-viable ESPrinkler build: **ESP32-C3**,
 **OLED 128x64**, **rotary encoder + push button**, **2-channel relay**.
-Designed for wall mounting with the controls on top so the user looks down
-at the OLED and reaches the knob from above.
+Designed for wall mounting with the controls on top: the back sits against the
+wall, the box protrudes like a small shelf, and you look down at the OLED and
+reach the knob from above. The lid snaps closed — no fasteners — and carries a
+recessed **ESPrinkler** wordmark with a sprinkler-spray logo.
 
 ![closed](img/closed.png)
 
@@ -21,106 +23,106 @@ Open in SketchUp (desktop or Web). To produce STLs for printing, select the
 
 | Dimension | Inches | mm |
 | --- | --- | --- |
-| Width (X) | 4.50 | 114 |
+| Width (X), body | 4.50 | 114 |
+| Width including screw tabs | 5.70 | 145 |
 | Depth (Y) | 3.00 | 76 |
-| Height (Z) | 1.45 | 37 |
+| Height (Z), body | 1.45 | 37 |
 | Wall / lid thickness | 0.10 | 2.5 |
 
-The case body is **1.45"** tall; the rotary knob adds ~0.65" above the lid.
+The rotary knob adds ~0.65" above the lid.
 
-## Two printable parts
-
-The model splits into a chassis (open-top tray) and a lid that drops in with a
-small lip and four corner screws.
+## Two printable parts — no lid fasteners
 
 ### Chassis
 
-Open-top tray, walls 0.10" thick. Cutouts:
+Open-top tray, walls 0.10" thick.
 
-| Face | Feature | Dimensions | World location |
+| Face | Feature | Dimensions | Location |
 | --- | --- | --- | --- |
-| Right | USB-C access | 0.55w x 0.35h | Y 2.025-2.575, Z 0.40-0.75 |
-| Back | Wire entry slot | 1.50w x 0.20h | X 1.50-3.00, Z 0.20-0.40 |
-| Back | Wall-mount hole (left) | dia 0.36 | (X 0.55, Z 1.05) |
-| Back | Wall-mount hole (right) | dia 0.36 | (X 3.95, Z 1.05) |
-| Front | — (smooth) | — | — |
+| Right | USB-C access | 0.55w x 0.35h | Y 2.025–2.575, Z 0.40–0.75 |
+| Back | Wire entry slot | 1.50w x 0.20h | X 1.50–3.00, Z 0.20–0.40 |
+| Front + Back | Snap windows (2 each) | 0.34w x 0.07h | X 1.13–1.47 & 3.03–3.37, Z 1.13–1.20 |
 | Left | — (smooth) | — | — |
 
-Mount the back face to a wall with two screws through the 0.36" holes (clears
-a #8 pan head). Wires drop in through the cable slot under the screws.
+**Exterior wall-mount screw tabs:** one per side, flush with the back face so
+the box mounts tight to drywall. Each tab is 0.60 x 0.70 x 0.16" with a 0.18"
+(4.6 mm) through-hole — sized for a common **#6 drywall screw** (3.5 mm shank,
+8 mm head). No need to open the case to mount it.
 
-Internal mounting bosses (all 0.18 OD cylindrical posts unless noted):
+Interior standoffs (cylindrical posts, 0.18" tall):
 
-- **4 lid screw posts** at corners (0.30, 0.30), (4.20, 0.30), (4.20, 2.70),
-  (0.30, 2.70) — 0.26 OD, 1.25 tall, accept self-tapping screws from the lid.
-- **4 relay-module standoffs** at PCB-hole positions for a generic 2-channel
-  relay module (~50 x 39 mm PCB) — 0.18 tall.
-- **2 ESP32-C3 standoffs** on the non-USB end of the XIAO board, oriented so
-  the USB-C jack aligns with the right-wall cutout — 0.18 tall.
+- **4 relay-module standoffs** for a generic 2-channel relay module
+  (~50 x 39 mm PCB).
+- **2 ESP32-C3 standoffs** at the non-USB end of the XIAO board, aligned so
+  the USB-C jack faces the right-wall cutout.
 
 ### Lid
 
-Flat plate with cutouts and a perimeter lip frame for friction-fit alignment.
+Flat plate, 0.10" thick, with a snap lip frame underneath.
 
-| Feature | Dimensions | World location on lid |
+| Feature | Dimensions | Location on lid |
 | --- | --- | --- |
-| OLED window | 1.10w x 0.60d | X 0.60-1.70, Y 0.45-1.05 |
-| Rotary shaft hole | dia 0.36 | (X 3.40, Y 0.75) |
-| 4 lid screw clearance holes | dia 0.15 | corners (0.30, 0.30) etc. |
-| Interior lip frame | 4.28 x 2.78 outer, 0.12 wide, 0.06 deep | centered |
+| OLED window | **25 x 17 mm** (0.984 x 0.669) | centered (X 1.15, Y 0.75) |
+| Rotary shaft hole | **dia 7 mm** (0.276) | (X 3.40, Y 0.75) |
+| Encoder body recess (underside) | **13 x 13 mm, 1 mm deep** | centered on shaft hole |
+| Engraved text + logo (top) | 0.6 mm deep | back half of the lid |
 
-The lip is a **perimeter frame** (a thin rectangular ring around the edge),
-not a solid plate — so it clears the OLED window and the OLED standoffs that
-hang from the lid underside.
-
-Four **OLED standoffs** (0.18 OD x 0.20 tall) hang from the lid underside at
-(0.70, 0.30), (1.60, 0.30), (1.60, 1.20), (0.70, 1.20) — the 23 mm x 23 mm
-hole pattern for a standard 0.96" SSD1306 module.
-
-The KY-040 / EC11 encoder mounts directly to the lid by its threaded bushing
-(nut + washer on the outside). No internal bracket is needed for it.
+- The **encoder recess** captures the square EC11 body so the encoder can't
+  rotate or wander — the bushing nut just snugs it, it doesn't position it.
+- **4 OLED bosses** (4 mm OD, 2.5 mm long) with **1.4 mm dia pegs** (2.5 mm
+  long) hang from the underside on the standard 23 x 23 mm hole pattern of a
+  0.96" SSD1306 module. The PCB seats on the boss shoulders with the pegs
+  through its corner holes; melt the peg tips with a soldering iron to stake,
+  or leave as a friction fit.
+- **Snap-fit:** a perimeter lip frame (0.12" wide, 0.25" deep) drops inside
+  the walls; four wedge bumps on the lip's front/back faces click into the
+  matching wall windows. Press the lid straight down to close. To open, press
+  the bumps inward through the windows (visible as two small slots on the
+  front and back) with a fingernail or small screwdriver while lifting.
+- **Engraving:** "ESPrinkler" in a stencil typeface (6.6 mm caps) plus a
+  spray-arc logo — a nozzle square with three fanning arcs — recessed 0.6 mm
+  into the top surface. Prints crisply with the lid face-down on the bed.
 
 ## Layout (top view)
 
 ```
-   +-----------------------------------+   <- back wall (cable + 2 mount holes)
-   |  o                              o |
-   |       [ Relay ][ Relay ]          |   <- 2-channel relay module
+   +-----------------------------------+   <- back wall (cable slot low)
+[T]|                                   |[T] <- screw tabs, flush w/ back face
+   |       [ Relay ][ Relay ]          |
    |       term     term               |
-   |  o                              o |
-   | (lid screw)                       |
-   |                       [ESP32]     |   <- XIAO ESP32-C3, USB-C facing right
-   |       [OLED]    (knob)            |   <- on lid (above, top-mount)
-   +-----------------------------------+   <- front wall (smooth)
+   |   )))                             |   <- engraved logo + "ESPrinkler"
+   |                       [ESP32]     |   <- XIAO, USB-C facing right wall
+   |       [OLED]    (knob)            |   <- window + 7mm shaft hole in lid
+   +--[=]----------------[=]-----------+   <- front wall snap slots
        0                            4.5  (X, inches)
 ```
 
 ## Print notes
 
-- **Material:** PLA or PETG. 0.20 mm layer height is fine; 0.15 mm cleans up
-  the screw-hole edges.
-- **Orientation:** print chassis with the open top facing up (no supports needed
-  inside). Print the lid flat (face down). The lid cutouts print bridge-free.
-- **Infill:** 20-25 % is plenty for either part.
-- **Screws:** four #4 x 1/2" self-tapping screws hold the lid to the chassis.
-  Two #8 wood screws (or wall plugs) anchor the chassis to a wall through the
-  back-wall mount holes.
+- **Material:** PETG recommended for the lid (snap lip flexes); PLA is fine
+  for the chassis. 0.20 mm layers OK; 0.15 mm sharpens the engraving and pegs.
+- **Orientation:** chassis open-top up, no supports. Lid **top-face down** on
+  the bed — engraving prints into the first layers, lip/bosses/pegs build up
+  as small towers. No supports needed on either part.
+- **Infill:** 20–25 %.
+- **Hardware:** two #6 drywall screws (wall mounting) and the encoder's own
+  bushing nut. That's the entire fastener list — the lid and OLED need none.
 
 ## Compatibility notes
 
 This is a **representative** model, not a verified hardware fit-check. The
-internal layout and mounting-boss positions assume:
+internal layout and mounting positions assume:
 
-- **ESP32-C3:** Seeed XIAO ESP32-C3 (21 x 17.8 x 3.5 mm, USB-C on the short
-  edge). Larger ESP32-C3 boards (e.g. DevKitC) won't fit without resizing.
-- **OLED:** generic SSD1306 0.96" 128x64 module with 27 x 27 mm PCB and
-  4-pin I2C header. The 23 x 23 mm corner-hole pattern is standard.
-- **Rotary encoder:** EC11-style rotary encoder with 7 mm threaded bushing
-  and push-button (KY-040 module wiring; encoder mounted directly to the
-  lid, wired to the ESP32 with short jumpers).
+- **ESP32-C3:** Seeed XIAO ESP32-C3 (21 x 17.8 mm, USB-C on the short edge).
+- **OLED:** generic SSD1306 0.96" 128x64 module, 27 x 27 mm PCB, 23 x 23 mm
+  mounting-hole pattern. Measure your module's hole diameter — pegs are
+  1.4 mm; drill or scale if your PCB holes differ.
+- **Rotary encoder:** EC11-style with 7 mm threaded bushing and ~12.4 mm
+  square body (KY-040 wiring). Body noses 1 mm into the lid recess; nut +
+  washer go on top of the lid.
 - **Relay module:** generic 2-channel 5 V relay board, ~50 x 39 mm PCB,
   screw-terminal NO/COM/NC outputs on one long edge.
 
-Adjust the dimensions in the SketchUp file if your specific modules differ.
-The geometry helpers in the source SketchUp Python script are parameterized
-on width, depth, height and cutout positions — small edits regenerate cleanly.
+Adjust dimensions in the SketchUp file if your modules differ. The geometry
+helpers in the source script are parameterized on width, depth, height and
+cutout positions — small edits regenerate cleanly.
