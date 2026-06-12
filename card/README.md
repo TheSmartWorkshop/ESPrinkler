@@ -3,6 +3,10 @@
 The Home Assistant dashboard card for ESPrinkler — a **separate artifact** from the firmware,
 on its **own release track**, distributed via **HACS**.
 
+![ESPrinkler card preview](img/preview.png)
+
+*Representative render with one zone running. Real card colors track your HA theme.*
+
 It's a [Lit](https://lit.dev) custom element that runs in the browser and talks to HA core
 (not the device). It binds to the [entity contract](../docs/entity-contract.md): give it the
 controller's state entities and a list of zones, and it renders status, start/stop/pause,
