@@ -14,12 +14,13 @@ the schedule toggle, and per-zone enable/run with live countdowns.
 
 ## Install via HACS (recommended)
 
-1. In Home Assistant, open **HACS → Custom repositories**.
-2. Add `https://github.com/TheSmartWorkshop/ESPrinkler` with category **Lovelace**.
+1. In Home Assistant, open **HACS → ⋮ menu → Custom repositories**.
+2. Add `https://github.com/TheSmartWorkshop/ESPrinkler` with type **Dashboard**.
+   (HACS renamed the old "Lovelace / Plugin" type to **Dashboard** — same thing.)
 3. Click **ESPrinkler Card** in the list, then **Download**.
-4. HACS adds it to your dashboard resources automatically (or prompts you to). Refresh
-   the dashboard.
-5. Add a card → search **ESPrinkler Card** in the picker.
+4. HACS registers it as a Lovelace resource automatically. Reload the browser.
+5. Edit a dashboard → **Add card** → search **ESPrinkler Card** and pick it.
+   The visual editor opens with empty fields ready to fill — no YAML required.
 
 Updates land here the same way: HACS will show a new version when a `card-v*` tag is
 published in this repo.
@@ -33,6 +34,21 @@ published in this repo.
 4. Add the card to a dashboard.
 
 ## Card configuration
+
+### Visual editor (recommended)
+
+Add the card from your dashboard's **Add card → ESPrinkler Card** and you'll get a
+full GUI editor: expandable sections for **Controller state**, **Controls**,
+**Adjustments**, and **Zone-map overlay**, plus a **Zones** list with per-zone
+add / remove / reorder. Every entity field is an HA entity picker filtered to the
+correct domain (switch, sensor, button, etc.), and the zone-map pin positions use
+slider inputs that round-trip cleanly back to YAML.
+
+The editor and the YAML below are interchangeable: anything you set in the GUI
+serializes back to the same config keys, so you can flip to **Show code editor**
+at any time.
+
+### YAML reference
 
 Zone entity ids follow `switch.<device>_zone_<N>` if you copied
 [`examples/oled.yaml`](../examples/oled.yaml) — the firmware now uses generic `Zone N`
@@ -120,7 +136,11 @@ each `card-v*` tag.
 
 ## Roadmap
 
-- **v0.3 (now):** live zone renames via `name_entity`, HACS distribution.
-- **Next:** interactive drag editor for `map_position`; graphical config editor.
+- **v0.3:** live zone renames via `name_entity`, HACS distribution.
+- **v0.4 (now):** visual config editor covering every field (controller, controls,
+  adjustments, zone-map, zones with add/remove/reorder), HA entity pickers filtered
+  per domain, slider inputs for map pin coordinates.
+- **Next:** drag-to-position the zone-map pins on the actual image; presets for
+  common ESPrinkler entity-naming conventions to auto-populate the editor.
 
 Precedent worth studying: [`EvotecIT/lovelace-lawn-mower-card`](https://github.com/EvotecIT/lovelace-lawn-mower-card).

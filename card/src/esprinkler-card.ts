@@ -1,9 +1,9 @@
 import { LitElement, html, css, nothing, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import type { HomeAssistant } from "custom-card-helpers";
+import type { HomeAssistant, LovelaceCardEditor } from "custom-card-helpers";
 import type { ESPrinklerCardConfig, ZoneConfig, ZoneMapConfig } from "./types";
 
-const CARD_VERSION = "0.3.0";
+const CARD_VERSION = "0.4.0";
 
 const STATE_ICON: Record<string, string> = {
   idle: "mdi:water-off",
@@ -19,13 +19,31 @@ export class ESPrinklerCard extends LitElement {
   @state() private config!: ESPrinklerCardConfig;
 
   public setConfig(config: ESPrinklerCardConfig): void {
-    if (!config || !Array.isArray(config.zones) || config.zones.length === 0) {
-      throw new Error("esprinkler-card: you must define at least one zone");
+    if (!config) {
+      throw new Error("esprinkler-card: invalid config");
     }
     if (config.zone_map && !config.zone_map.image) {
       throw new Error("esprinkler-card: zone_map.image is required when zone_map is set");
     }
-    this.config = config;
+    this.config = {
+      ...config,
+      zones: Array.isArray(config.zones) ? config.zones : [],
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lovelace integration: the GUI editor + sensible stub config in the picker.
+  // ---------------------------------------------------------------------------
+  public static async getConfigElement(): Promise<LovelaceCardEditor> {
+    await import("./esprinkler-card-editor");
+    return document.createElement("esprinkler-card-editor") as LovelaceCardEditor;
+  }
+
+  public static getStubConfig(): Partial<ESPrinklerCardConfig> {
+    return {
+      title: "ESPrinkler",
+      zones: [{}],
+    };
   }
 
   public getCardSize(): number {
@@ -351,6 +369,8 @@ export class ESPrinklerCard extends LitElement {
   type: "esprinkler-card",
   name: "ESPrinkler Card",
   description: "Zone control and scheduling for an ESPrinkler irrigation controller.",
+  preview: true,
+  documentationURL: "https://github.com/TheSmartWorkshop/ESPrinkler/blob/main/card/README.md",
 });
 
 console.info(
